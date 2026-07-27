@@ -5,6 +5,7 @@ import {
   loadStories,
   loadStoryHtml,
 } from './stories';
+import { mountStoryReader, type StoryReaderHandle } from './storyReader';
 import { mountOrbitBrand } from './orbitBrand';
 import { mountVibe, type VibeHandle } from './vibe';
 import type { ResolvedApp, Story } from './types';
@@ -235,6 +236,7 @@ async function main(): Promise<void> {
   const destroyOrbit = mountOrbitBrand(root);
   let unbindMotion: (() => void) | undefined;
   let unbindAgents: (() => void) | undefined;
+  let storyReader: StoryReaderHandle | undefined;
   let section: Section = 'apps';
   let appsCache: ResolvedApp[] | null = null;
   let storiesCache: Story[] | null = null;
@@ -244,6 +246,8 @@ async function main(): Promise<void> {
     unbindAgents?.();
     unbindMotion = undefined;
     unbindAgents = undefined;
+    storyReader?.destroy();
+    storyReader = undefined;
   };
 
   const renderApps = async (): Promise<void> => {
@@ -295,27 +299,66 @@ async function main(): Promise<void> {
       const html = await loadStoryHtml(story.path);
       const date = formatStoryDate(story.date);
       contentMount.innerHTML = `
-        <article class="story-reader">
-          <button type="button" class="story-back" data-story-back>
-            ← All stories
-          </button>
-          <header class="story-reader-header">
-            <h2 class="story-reader-title">${escapeHtml(story.title)}</h2>
-            <time class="story-reader-date" datetime="${escapeHtml(story.date)}">${escapeHtml(date)}</time>
-          </header>
-          <div class="story-body">${html}</div>
-        </article>
+        <div class="story-reader-shell" data-story-shell>
+          <div class="story-progress" aria-hidden="true">
+            <div class="story-progress-bar" data-story-progress></div>
+          </div>
+          <div class="story-reader-toolbar">
+            <button type="button" class="story-back" data-story-back>
+              ← All stories
+            </button>
+            <div class="story-reader-toolbar-actions">
+              <button type="button" class="story-resume" data-story-resume hidden>
+                Resume reading
+              </button>
+              <button
+                type="button"
+                class="story-toc-toggle"
+                data-toc-toggle
+                aria-expanded="false"
+                aria-controls="story-toc"
+                hidden
+              >
+                Contents
+              </button>
+            </div>
+          </div>
+          <div class="story-toc-backdrop" data-toc-backdrop></div>
+          <div class="story-reader-layout">
+            <nav
+              class="story-toc"
+              id="story-toc"
+              data-story-toc
+              aria-label="Chapters"
+              hidden
+            ></nav>
+            <article class="story-reader">
+              <header class="story-reader-header">
+                <h2 class="story-reader-title">${escapeHtml(story.title)}</h2>
+                <time class="story-reader-date" datetime="${escapeHtml(story.date)}">${escapeHtml(date)}</time>
+              </header>
+              <div class="story-body" data-story-body>${html}</div>
+            </article>
+          </div>
+        </div>
       `;
-      const back = contentMount.querySelector('[data-story-back]');
-      if (back instanceof HTMLButtonElement) {
-        back.addEventListener('click', () => {
-          void renderStoriesList();
-        });
+      const shell = contentMount.querySelector('[data-story-shell]');
+      const body = contentMount.querySelector('[data-story-body]');
+      if (!(shell instanceof HTMLElement) || !(body instanceof HTMLElement)) {
+        throw new Error('story reader shell missing');
       }
+      storyReader = mountStoryReader({
+        shell,
+        body,
+        slug: story.slug,
+        onBack: () => {
+          void renderStoriesList();
+        },
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       contentMount.innerHTML = `
-        <div class="story-reader">
+        <div class="story-reader-shell">
           <button type="button" class="story-back" data-story-back>← All stories</button>
           <p class="apps-status error">${escapeHtml(message)}</p>
         </div>
