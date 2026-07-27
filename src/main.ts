@@ -1,8 +1,15 @@
 import './styles.css';
 import { formatUpdatedAt, loadResolvedApps } from './registry';
+import {
+  formatStoryDate,
+  loadStories,
+  loadStoryHtml,
+} from './stories';
 import { mountOrbitBrand } from './orbitBrand';
 import { mountVibe, type VibeHandle } from './vibe';
-import type { ResolvedApp } from './types';
+import type { ResolvedApp, Story } from './types';
+
+type Section = 'apps' | 'stories';
 
 function escapeHtml(text: string): string {
   return text
@@ -12,7 +19,7 @@ function escapeHtml(text: string): string {
     .replaceAll('"', '&quot;');
 }
 
-function renderCard(app: ResolvedApp, index: number): string {
+function renderAppCard(app: ResolvedApp, index: number): string {
   const delay = Math.min(index * 70, 420);
   const tagline =
     app.tagline !== null
@@ -63,9 +70,34 @@ function renderCard(app: ResolvedApp, index: number): string {
   `;
 }
 
+function renderStoryCard(story: Story, index: number): string {
+  const delay = Math.min(index * 70, 420);
+  const date = formatStoryDate(story.date);
+  const excerpt =
+    story.excerpt.length > 0
+      ? `<p class="story-excerpt">${escapeHtml(story.excerpt)}</p>`
+      : '';
+  return `
+    <button
+      type="button"
+      class="story-card"
+      data-story-slug="${escapeHtml(story.slug)}"
+      style="animation-delay: ${delay}ms"
+    >
+      <h2 class="story-card-title">${escapeHtml(story.title)}</h2>
+      ${excerpt}
+      <div class="story-card-meta">
+        <time datetime="${escapeHtml(story.date)}">${escapeHtml(date)}</time>
+        <span class="story-open">Read →</span>
+      </div>
+    </button>
+  `;
+}
+
 function renderShell(root: HTMLElement): {
   canvas: HTMLCanvasElement;
-  appsMount: HTMLElement;
+  contentMount: HTMLElement;
+  nav: HTMLElement;
 } {
   root.innerHTML = `
     <canvas class="sky" aria-hidden="true"></canvas>
@@ -73,10 +105,18 @@ function renderShell(root: HTMLElement): {
       <header class="masthead">
         <h1 class="brand-sr">Futuremagic</h1>
         <p class="tag">Vibe-coded apps</p>
+        <nav class="site-nav" aria-label="Sections">
+          <button type="button" class="site-nav-btn is-active" data-section="apps">
+            Apps
+          </button>
+          <button type="button" class="site-nav-btn" data-section="stories">
+            Stories
+          </button>
+        </nav>
       </header>
-      <main class="apps" aria-label="Apps">
-        <div class="apps-mount" data-apps>
-          <p class="apps-status">Loading apps…</p>
+      <main class="content" aria-label="Content">
+        <div class="content-mount" data-content>
+          <p class="apps-status">Loading…</p>
         </div>
       </main>
     </div>
@@ -93,11 +133,16 @@ function renderShell(root: HTMLElement): {
   `;
 
   const canvas = root.querySelector('.sky');
-  const appsMount = root.querySelector('[data-apps]');
-  if (!(canvas instanceof HTMLCanvasElement) || !(appsMount instanceof HTMLElement)) {
+  const contentMount = root.querySelector('[data-content]');
+  const nav = root.querySelector('.site-nav');
+  if (
+    !(canvas instanceof HTMLCanvasElement) ||
+    !(contentMount instanceof HTMLElement) ||
+    !(nav instanceof HTMLElement)
+  ) {
     throw new Error('Failed to mount page shell');
   }
-  return { canvas, appsMount };
+  return { canvas, contentMount, nav };
 }
 
 function bindCardMotion(grid: HTMLElement): () => void {
@@ -166,52 +211,188 @@ function bindAgentHighlights(
   return () => cancelAnimationFrame(raf);
 }
 
+function setActiveNav(nav: HTMLElement, section: Section): void {
+  for (const btn of nav.querySelectorAll<HTMLButtonElement>('[data-section]')) {
+    const isActive = btn.dataset.section === section;
+    btn.classList.toggle('is-active', isActive);
+    btn.setAttribute('aria-current', isActive ? 'page' : 'false');
+  }
+  const tag = document.querySelector('.tag');
+  if (tag instanceof HTMLElement) {
+    tag.textContent =
+      section === 'apps' ? 'Vibe-coded apps' : 'Stories from Futuremagic';
+  }
+}
+
 async function main(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) {
     throw new Error('#app missing');
   }
 
-  const { canvas, appsMount } = renderShell(root);
+  const { canvas, contentMount, nav } = renderShell(root);
   const vibe = mountVibe(canvas);
   const destroyOrbit = mountOrbitBrand(root);
   let unbindMotion: (() => void) | undefined;
   let unbindAgents: (() => void) | undefined;
+  let section: Section = 'apps';
+  let appsCache: ResolvedApp[] | null = null;
+  let storiesCache: Story[] | null = null;
+
+  const clearViewBindings = (): void => {
+    unbindMotion?.();
+    unbindAgents?.();
+    unbindMotion = undefined;
+    unbindAgents = undefined;
+  };
+
+  const renderApps = async (): Promise<void> => {
+    clearViewBindings();
+    contentMount.innerHTML = '<p class="apps-status">Loading apps…</p>';
+    try {
+      if (appsCache === null) {
+        appsCache = await loadResolvedApps();
+      }
+      const apps = appsCache;
+      if (apps.length === 0) {
+        contentMount.innerHTML =
+          '<p class="apps-status">No apps registered yet.</p>';
+        return;
+      }
+
+      contentMount.innerHTML = `<div class="apps-grid" data-grid>${apps
+        .map((app, i) => renderAppCard(app, i))
+        .join('')}</div>`;
+      const grid = contentMount.querySelector('[data-grid]');
+      if (!(grid instanceof HTMLElement)) {
+        throw new Error('apps grid missing');
+      }
+      unbindMotion = bindCardMotion(grid);
+      unbindAgents = bindAgentHighlights(grid, vibe);
+
+      for (const img of grid.querySelectorAll<HTMLImageElement>('.app-shot')) {
+        img.addEventListener('error', () => {
+          console.warn(`Screenshot missing: ${img.currentSrc || img.src}`);
+          const fallback = document.createElement('div');
+          fallback.className = 'app-shot-fallback';
+          const card = img.closest('[data-app-card]');
+          const title = card?.querySelector('.app-title')?.textContent ?? 'App';
+          fallback.textContent = title;
+          img.replaceWith(fallback);
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      contentMount.innerHTML = `<p class="apps-status error">${escapeHtml(message)}</p>`;
+      throw err;
+    }
+  };
+
+  const renderStoryReader = async (story: Story): Promise<void> => {
+    clearViewBindings();
+    contentMount.innerHTML = '<p class="apps-status">Loading story…</p>';
+    try {
+      const html = await loadStoryHtml(story.path);
+      const date = formatStoryDate(story.date);
+      contentMount.innerHTML = `
+        <article class="story-reader">
+          <button type="button" class="story-back" data-story-back>
+            ← All stories
+          </button>
+          <header class="story-reader-header">
+            <h2 class="story-reader-title">${escapeHtml(story.title)}</h2>
+            <time class="story-reader-date" datetime="${escapeHtml(story.date)}">${escapeHtml(date)}</time>
+          </header>
+          <div class="story-body">${html}</div>
+        </article>
+      `;
+      const back = contentMount.querySelector('[data-story-back]');
+      if (back instanceof HTMLButtonElement) {
+        back.addEventListener('click', () => {
+          void renderStoriesList();
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      contentMount.innerHTML = `
+        <div class="story-reader">
+          <button type="button" class="story-back" data-story-back>← All stories</button>
+          <p class="apps-status error">${escapeHtml(message)}</p>
+        </div>
+      `;
+      const back = contentMount.querySelector('[data-story-back]');
+      if (back instanceof HTMLButtonElement) {
+        back.addEventListener('click', () => {
+          void renderStoriesList();
+        });
+      }
+      throw err;
+    }
+  };
+
+  const renderStoriesList = async (): Promise<void> => {
+    clearViewBindings();
+    contentMount.innerHTML = '<p class="apps-status">Loading stories…</p>';
+    try {
+      if (storiesCache === null) {
+        storiesCache = await loadStories();
+      }
+      const stories = storiesCache;
+      if (stories.length === 0) {
+        contentMount.innerHTML =
+          '<p class="apps-status">No stories published yet.</p>';
+        return;
+      }
+
+      contentMount.innerHTML = `<div class="stories-list" data-stories-list>${stories
+        .map((story, i) => renderStoryCard(story, i))
+        .join('')}</div>`;
+
+      for (const card of contentMount.querySelectorAll<HTMLButtonElement>(
+        '[data-story-slug]',
+      )) {
+        card.addEventListener('click', () => {
+          const slug = card.dataset.storySlug;
+          if (slug === undefined) return;
+          const story = stories.find((s) => s.slug === slug);
+          if (story === undefined) return;
+          void renderStoryReader(story);
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      contentMount.innerHTML = `<p class="apps-status error">${escapeHtml(message)}</p>`;
+      throw err;
+    }
+  };
+
+  const showSection = async (next: Section): Promise<void> => {
+    section = next;
+    setActiveNav(nav, section);
+    if (section === 'apps') {
+      await renderApps();
+    } else {
+      storiesCache = null;
+      await renderStoriesList();
+    }
+  };
+
+  for (const btn of nav.querySelectorAll<HTMLButtonElement>('[data-section]')) {
+    btn.addEventListener('click', () => {
+      const next = btn.dataset.section;
+      if (next !== 'apps' && next !== 'stories') return;
+      if (next === section) return;
+      void showSection(next).catch((err: unknown) => {
+        console.error(err);
+      });
+    });
+  }
 
   try {
-    const apps = await loadResolvedApps();
-    if (apps.length === 0) {
-      appsMount.innerHTML =
-        '<p class="apps-status">No apps registered yet.</p>';
-      return;
-    }
-
-    appsMount.innerHTML = `<div class="apps-grid" data-grid>${apps
-      .map((app, i) => renderCard(app, i))
-      .join('')}</div>`;
-    const grid = appsMount.querySelector('[data-grid]');
-    if (!(grid instanceof HTMLElement)) {
-      throw new Error('apps grid missing');
-    }
-    unbindMotion = bindCardMotion(grid);
-    unbindAgents = bindAgentHighlights(grid, vibe);
-
-    // Replace broken screenshots with fallback; warn instead of leaving a hard error
-    for (const img of grid.querySelectorAll<HTMLImageElement>('.app-shot')) {
-      img.addEventListener('error', () => {
-        console.warn(`Screenshot missing: ${img.currentSrc || img.src}`);
-        const fallback = document.createElement('div');
-        fallback.className = 'app-shot-fallback';
-        const card = img.closest('[data-app-card]');
-        const title = card?.querySelector('.app-title')?.textContent ?? 'App';
-        fallback.textContent = title;
-        img.replaceWith(fallback);
-      });
-    }
+    await showSection('apps');
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    appsMount.innerHTML = `<p class="apps-status error">${escapeHtml(message)}</p>`;
-    throw err;
+    // Error already rendered into the mount
+    console.error(err);
   }
 
   window.addEventListener(
@@ -219,8 +400,7 @@ async function main(): Promise<void> {
     () => {
       vibe.destroy();
       destroyOrbit();
-      unbindMotion?.();
-      unbindAgents?.();
+      clearViewBindings();
     },
     { once: true },
   );

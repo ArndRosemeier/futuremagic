@@ -1,6 +1,6 @@
 # Futuremagic hub - deploy to domain root on futuremagic.de
 # Uploads hub files into /webseiten/ WITHOUT wiping app subfolders
-# (Expert/, LlmTable/, ColossusWeb/, ...).
+# (Expert/, LlmTable/, ColossusWeb/, ...) or the stories/ content tree.
 
 param(
     [string]$RemotePath = "/webseiten/",
@@ -17,7 +17,10 @@ Set-Location $RepoRoot
 $DistDir = Join-Path $RepoRoot "dist"
 
 # Subdirectory names that must never be deleted by this hub deploy
-$ProtectedDirs = @("Expert", "LlmTable", "ColossusWeb")
+$ProtectedDirs = @("Expert", "LlmTable", "ColossusWeb", "stories")
+
+# Registry files managed outside the hub build (apps by app deploys, stories by Story Manager)
+$ProtectedRegistryFiles = @("apps.json", "stories.json")
 
 function Normalize-FtpDir([string]$p) {
     if (-not $p.StartsWith("/")) { $p = "/$p" }
@@ -186,28 +189,32 @@ try {
         $uploadMap[$rel] = $file.FullName
     }
 
-    # Ensure assets/ and shots/ exist
+    # Ensure assets/, shots/, and stories/ exist
     Ensure-FtpDirectory "${RemotePath}assets/" $FTP_PASSWORD
     Ensure-FtpDirectory "${RemotePath}shots/" $FTP_PASSWORD
+    Ensure-FtpDirectory "${RemotePath}stories/" $FTP_PASSWORD
 
     Write-Host ""
     Write-Host "=== Uploading hub files ===" -ForegroundColor Cyan
     $uploaded = 0
-    $skipAppsJson = $names -contains "apps.json"
-    if ($skipAppsJson) {
-        Write-Host "  (keeping existing remote apps.json - not overwriting registry)" -ForegroundColor Gray
+    $remoteRegistrySkip = @{}
+    foreach ($reg in $ProtectedRegistryFiles) {
+        if ($names -contains $reg) {
+            $remoteRegistrySkip[$reg] = $true
+            Write-Host "  (keeping existing remote $reg - not overwriting registry)" -ForegroundColor Gray
+        }
     }
 
     foreach ($rel in ($uploadMap.Keys | Sort-Object)) {
         $remoteFile = "$RemotePath$rel"
-        # Never overwrite protected app trees
+        # Never overwrite protected app/story trees
         $top = ($rel -split '/')[0]
         if ($ProtectedDirs -contains $top) {
             Write-Host "[SKIP] refusing to upload into protected dir: $rel" -ForegroundColor Yellow
             continue
         }
-        if ($rel -eq "apps.json" -and $skipAppsJson) {
-            Write-Host "[SKIP] apps.json (remote registry already present)" -ForegroundColor Yellow
+        if ($remoteRegistrySkip.ContainsKey($rel)) {
+            Write-Host "[SKIP] $rel (remote registry already present)" -ForegroundColor Yellow
             continue
         }
         Write-Host "  ^ $rel" -ForegroundColor White
@@ -259,7 +266,8 @@ try {
     Write-Host ""
     Write-Host "Hub deployment finished. Uploaded $uploaded files." -ForegroundColor Green
     Write-Host "Site: $PublicUrl" -ForegroundColor Cyan
-    Write-Host "Registry: ${PublicUrl}apps.json" -ForegroundColor Cyan
+    Write-Host "Apps registry: ${PublicUrl}apps.json" -ForegroundColor Cyan
+    Write-Host "Stories registry: ${PublicUrl}stories.json" -ForegroundColor Cyan
 } catch {
     Write-Host "Deployment failed: $($_.Exception.Message)" -ForegroundColor Red
     exit 1

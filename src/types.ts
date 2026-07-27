@@ -31,3 +31,16 @@ export type ResolvedApp = {
   tags: string[];
   screenshotUrl: string | null;
 };
+
+export type Story = {
+  slug: string;
+  title: string;
+  date: string;
+  excerpt: string;
+  path: string;
+};
+
+export type StoriesRegistry = {
+  version: number;
+  stories: Story[];
+};
