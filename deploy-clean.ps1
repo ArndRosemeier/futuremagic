@@ -17,7 +17,16 @@ Set-Location $RepoRoot
 $DistDir = Join-Path $RepoRoot "dist"
 
 # Subdirectory names that must never be deleted by this hub deploy
-$ProtectedDirs = @("Expert", "LlmTable", "ColossusWeb", "stories")
+$ProtectedDirs = @(
+    "Expert",
+    "LlmTable",
+    "ColossusWeb",
+    "ArmchairGeneral",
+    "Conquest",
+    "Eco",
+    "EccentriCity",
+    "stories"
+)
 
 # Registry files managed outside the hub build (apps by app deploys, stories by Story Manager)
 $ProtectedRegistryFiles = @("apps.json", "stories.json")

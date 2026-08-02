@@ -211,9 +211,30 @@ if ($hasManifestoFile) {
     if (-not $AppRemoteDir.EndsWith("/")) {
         $AppRemoteDir = "$AppRemoteDir/"
     }
-    $manifestoRemote = "ftp://$FtpServer$($AppRemoteDir)futuremagic.json"
-    Upload-FtpFile $ManifestoLocalPath $manifestoRemote $FtpUser $FtpPassword
-    Write-Host "[OK] futuremagic.json uploaded to $AppRemoteDir" -ForegroundColor Green
+    # Ensure the app directory exists (register can run before first content upload).
+    $parts = $AppRemoteDir.Trim('/').Split('/', [StringSplitOptions]::RemoveEmptyEntries)
+    $current = "/"
+    foreach ($part in $parts) {
+        $current = "$current$part/"
+        try {
+            $mkdir = [System.Net.FtpWebRequest]::Create("ftp://$FtpServer$current")
+            $mkdir.Method = [System.Net.WebRequestMethods+Ftp]::MakeDirectory
+            $mkdir.Credentials = Get-FtpCredential $FtpUser $FtpPassword
+            $mkdir.UsePassive = $true
+            $mkdirResp = $mkdir.GetResponse()
+            $mkdirResp.Close()
+            Write-Host "Created directory: $current" -ForegroundColor Blue
+        } catch {
+            # Already exists, or parent missing - continue; upload will fail loudly if needed.
+        }
+    }
+    try {
+        $manifestoRemote = "ftp://$FtpServer$($AppRemoteDir)futuremagic.json"
+        Upload-FtpFile $ManifestoLocalPath $manifestoRemote $FtpUser $FtpPassword
+        Write-Host "[OK] futuremagic.json uploaded to $AppRemoteDir" -ForegroundColor Green
+    } catch {
+        Write-Host "[WARN] apps.json registered, but manifesto upload failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
 } elseif ($ManifestoLocalPath -ne "") {
     Write-Host "[SKIP] Manifesto not found: $ManifestoLocalPath" -ForegroundColor Yellow
 }
