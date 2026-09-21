@@ -41,7 +41,7 @@ dispatching anything.
 ## Board
 
 ```
-reconciled: d3f9b92 · 2026-09-21T16:2x+02:00 (session-13ea3b42, chief of staff)
+reconciled: 8aa77c5 · 2026-09-21T16:4x+02:00 (session-13ea3b42, chief of staff)
 
 SESSION | cos=session-13ea3b42-847e-4025-97fa-e6aa5b169aba | model=deepseek-flash
   | role=chief of staff (designated by the owner 2026-09-21) | state=active
@@ -74,19 +74,30 @@ PROBE | probe=5e18d0c9-aa0c-4075-b125-3a0201c78e94 | read-only
     cards. The real order is featured-then-title (src/registry.ts:138-141). See the TRAP
     below. Its decisive find: the migration is achievable with ZERO source changes.
 
-IN-FLIGHT | row=7 | writer=session (dispatched by the chief of staff) | branch=feat/app-index
-  | worktree=/home/administrator/projects/futuremagic/worktrees/app-index
-  | base=8453085 | state=dispatched, no commit yet
-  | scope=THE GENERATED INDEX (docs/21 §8, owner-approved F1(a) + F2(a)): a build-time
-    generator that discovers apps from the apps host's folder listing and folds each app's
-    manifesto inline into the hub's own SAME-ORIGIN index, so the runtime stops depending on
-    a cross-origin fetch that CORS blocks. Plus: optional `updatedAt` so absence is honest
-    instead of a dropped app, a loud failure when the host is unreachable, and the gate
-    running what the deploy runs.
-  | owner's words=verbatim "i go with your recommendations." (F1(a) generated same-origin
-    index; F2(a) staged per-record migration)
-  | note=the legacy server-side /apps.json is NOT decommissioned in this slice; the hub
-    simply stops reading it. Retiring it is queue rows 12/13/16.
+LANDED | row=7 (ledger row 7) | sha=8aa77c5 | branch=feat/app-index → fast-forwarded into
+  master, so 8aa77c5 IS master | base=8453085
+  | verify=MY OWN, on the INTEGRATED master tree: gate FULL exit 0 — `npm run build`
+    (generator + typecheck + vite build), 13 cards = 12 inventory + discovered `fracvibe`,
+    enrichment FOUND 11 / MISSING 0, 9 modules. Raw log
+    .gate-logs/gate-20260921T164132.log. `dist/apps.json` and `dist/apps.index.json` are
+    both 4755 B and `cmp`-identical, so `deploy-clean.ps1:148`'s assertion is satisfied.
+  | MY OWN DIFFERENTIAL — four arms the WRITER did not run, offline fixture, every hash
+    printed (`/tmp/mydiff`):
+      A baseline sha256 02697caf… — a FILE entry, an ABSOLUTE-URL entry and a `../` entry in
+        the listing do NOT become cards; a DISCOVERED folder is NOT enriched even when it
+        ships a manifesto (see queue row 19); a record whose `path` is an ABSOLUTE apps-host
+        URL IS enriched — the F2(a) proof that a migrated app keeps its tagline/tags/shot.
+      B `tags: ["ok",42]` sha256 eccc4e12… — tags dropped ENTIRELY, tagline kept: validation
+        parity with the runtime parser the generator replaced, on the inline path.
+      C migrated path with NO trailing slash sha256 9bccb0bf… — still enriched.
+      D malformed inventory → exit 1 with the previous index BYTE-IDENTICAL (…6e42740e both
+        sides): the atomic-on-success contract holds on the inventory path too, not only on
+        an unreachable host.
+  | retired=writer session, worktree `worktrees/app-index`, branch `feat/app-index`
+    (safe-delete: merged, nothing outside master).
+  | push=NO, by design (AGENTS §6).
+  | note=the hub now reads `/apps.index.json`; the legacy server-side `/apps.json` is NOT
+    decommissioned and is now read by nothing. Retiring it is queue rows 12/13/16.
 
 LANDED | row=2-6 (ledger rows 2-6) | sha=1040796 | branch=master | base=6e9a6e1
   | verify=MY OWN, on the COMMITTED tree and with the COMMITTED script: gate FULL GREEN
@@ -203,6 +214,19 @@ QUEUE | row=18 | needs=dispatch | SEVERITY=DANGEROUS (the survivor of old row 7)
     vs 3 live) ships as live. Deliberately NOT fixed in row 7 (the Story Manager owns that
     file and the publish path is Python/FTP). fix direction=the same treatment: make the
     absence of a remote registry a LOUD STOP, never a silent seed from a stale shadow.
+
+QUEUE | row=19 | needs=dispatch | SEVERITY=quality | found by the dispatcher's arm A
+  | A folder DISCOVERED on the apps host is NEVER enriched and its title is the RAW FOLDER
+    NAME, even when it ships a `futuremagic.json`: the generator fetches manifestos only for
+    INVENTORY records (scripts/generate-app-index.mjs:201 and :242-257). So a newly published
+    app shows up as `fracvibe` — lowercase, no tagline, no tags, no screenshot — until someone
+    adds it to `seed/apps.inventory.json`.
+  | MEASURED, not inferred: differential arm A put a valid manifesto at the discovered
+    fixture folder `newapp/futuremagic.json` and the card came out with NO `tagline`.
+  | RECOMMENDED: for a DISCOVERED record only, use its manifesto (title/tagline/tags/
+    screenshot) when one exists, leaving the inventory authoritative for records that are in
+    it. One branch in the generator plus a pin. Directly serves the owner's "the publish
+    skill is the new base for app discovery".
 
 TRAP | gate-summary-swallowed | MEASURED 2026-09-21, self-inflicted
   | The first scripts/gate.sh ran its body inside a `{ ... } > "$LOG"` group. `exit`

@@ -203,7 +203,12 @@ async function main() {
     if (url === null) continue;
     const response = await fetchHost(url, `the manifesto for "${record.slug}"`);
     if (!response.ok) {
-      // 404 / absent is NORMAL (5 of the 12 live apps have none). Warn, keep the card.
+      // A 404 / absent manifesto is NORMAL and not fatal: a published app may not ship
+      // one yet (measured 2026-09-21: the live host DID serve all 11 apps that claim a
+      // manifesto — found 11, missing 0 — while newly published `fracvibe` has none).
+      // Warn, keep the card. NOTE: the "5 of the 12 live apps have none" claim that stood
+      // here came from the hub repo's seed/manifestos/ count, NOT from the live host, and
+      // was wrong; it is corrected rather than left to rot.
       enrichmentMissing += 1;
       enrichmentErrors.push(record.slug);
       console.warn(

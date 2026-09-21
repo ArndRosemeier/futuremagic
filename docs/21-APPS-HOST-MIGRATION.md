@@ -105,9 +105,16 @@ OLD deploy (`deploy-clean.ps1:261-273`) with **no equivalent** in the publish-sk
    root-absolute. On the new host that is **404**; on the old host 200. The publish skill
    warns about this for *assets* (step 2); the manifesto has the same exposure and nothing
    checks it.
-2. **The registry already contradicts reality.** It claims `manifesto: true` for 11 apps while
-   only **7** manifestos exist, so 4 apps make a fetch that fails **silently** into a
-   `console.warn` (`src/registry.ts:72-80`).
+2. **CORRECTED 2026-09-21 — this entry was WRONG when written.** It claimed the registry
+   contradicts reality because it sets `manifesto: true` for 11 apps while "only 7
+   manifestos exist", leaving 4 silent fetch failures. That was a confusion of two
+   different sets: **7** is the count in this repo's `seed/manifestos/` (the hub-side
+   seeding step for the OLD deploy), not what the live host serves. Measured by the
+   generator on 2026-09-21: the live host returns a valid manifesto for **all 11** apps
+   that claim one — **found 11, missing 0**. There was no silent failure to fix, and the
+   generator's 404 path (which IS real for a newly published app like `fracvibe`) is
+   exercised only by the offline fixture. The wrong number reached a writer brief before
+   it was caught by the writer's own measurement.
 
 Note the asymmetry in failure modes: a broken `/apps.json` is a **visible** error
 (`src/main.ts:288-292`), a broken manifesto is **silent**, and a dead app link is silent too.
