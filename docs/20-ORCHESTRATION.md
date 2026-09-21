@@ -41,7 +41,7 @@ dispatching anything.
 ## Board
 
 ```
-reconciled: 8aa77c5 · 2026-09-21T16:4x+02:00 (session-13ea3b42, chief of staff)
+reconciled: 593174d · 2026-09-21T16:5x+02:00 (session-13ea3b42, chief of staff)
 
 SESSION | cos=session-13ea3b42-847e-4025-97fa-e6aa5b169aba | model=deepseek-flash
   | role=chief of staff (designated by the owner 2026-09-21) | state=active
@@ -184,28 +184,31 @@ QUEUE | row=15 | needs=OWNER
     whether the hub earns a test harness; if yes, that harness is itself a slice and
     docs/08-TESTING.md gets created by it.
 
-QUEUE | row=16 | needs=OWNER | blocks=the apps-host migration (docs/21)
-  | Switch the hub's app target to https://apps.futuremagic.de/ and make the publish skill
-    the discovery base. EXAMINED, not dispatched: docs/21-APPS-HOST-MIGRATION.md.
-  | MEASURED: the new host serves a public folder listing with 2 apps (expert, fracvibe)
-    while the hub links 12; and it sends NO Access-Control-Allow-Origin, so the hub cannot
-    read the listing or the manifests at runtime. The registry's LIST role is replaceable;
-    its METADATA role (title, updatedAt, order, enrichment) is not.
-  | RECOMMENDED: F1(a) a GENERATED same-origin index (build-time discovery from the host's
-    folders + enrichment folded in) and F2(a) staged per-record migration, which needs ZERO
-    source changes (`path` is used verbatim as href, src/registry.ts:87) but costs the
-    migrated app its tagline/tags/screenshot until F1 lands.
-  | REJECTED: a hard switch (10 of 12 links 404 silently) and runtime listing discovery
-    (impossible without ACAO on the apps host).
-  | WAITING ON: the owner answering F1 and F2 (docs/21 §8), plus the metadata-contract and
-    ~/apps-permanence questions in §10.
+QUEUE-CLOSED | row=16 | CONSUMED by ledger row 7 (F1(a)+F2(a) built and verified) and
+  | ledger row 8 (the two-sites strategy)
+  | was: switch the hub's app target to https://apps.futuremagic.de/ and make the publish
+    skill the discovery base — EXAMINED in docs/21, then BUILT as the generated index.
+  | STILL TRUE from the examination: the new host sends NO Access-Control-Allow-Origin, so
+    the browser can never read its listing or manifests — the build-time read is permanent,
+    not a stopgap. The old server-side `apps.json`, `Register-FuturemagicApp.ps1`, the
+    `$ProtectedDirs` list and `seed/manifestos/` are now PARK-UNTIL-FORWARD (ledger row 8):
+    do not churn them and do not edit the Windows deploy script for them.
 
-QUEUE | row=17 | needs=dispatch AFTER row 7 lands
-  | The FIRST staged migration (F2(a)). `expert` and `fracvibe` are already published on
-    apps.futuremagic.de; `Expert` is one of the live 12 (path /Expert/) and `fracvibe` is not
-    in the registry at all. Migrate `Expert`'s record to the new host and decide whether
-    `fracvibe` becomes a card. This is the DATA edit the generated index makes cheap.
-  | BLOCKED ON row 7: it edits the inventory file that row 7 creates.
+QUEUE | row=17 | needs=dispatch | BLOCKED only on the owner's yes on the build
+  | THE FIRST MIGRATION (F2(a)) — and it sets the TRIGGER RULE for every later one. Ledger
+    row 8 fixes the rule: migrate an app's card WHEN that app is (re)published to the new
+    host, because until the card moves it shows the FROZEN old copy, so republishing without
+    migrating would silently show a stale app.
+  | `expert` and `fracvibe` are already on the new host. `Expert` is one of the live 12;
+    `fracvibe` is not in the inventory at all.
+  | MEASURED: the two `Expert` copies are NOT the same build — new host
+    `main-B30ZL_cX.js`, old host `main-BgCco9IA.js` — so flipping the link switches builds.
+    The new host serves the local `dist` built 2026-09-21 15:57. OWNER: confirm THAT is the
+    build to show before I flip it.
+  | ALSO: give `fracvibe` a proper title by adding it to `seed/apps.inventory.json`; its
+    manifesto 404s, so discovery alone would show it as a lowercase folder name (row 19).
+  | Both are DATA edits to the inventory — no source change. The old copies stay untouched
+    and serviceable (all 12 answer 200, measured).
 
 QUEUE | row=18 | needs=dispatch | SEVERITY=DANGEROUS (the survivor of old row 7)
   | `stories.json` has the SAME clobber shape that row 7 fixed for apps: deploy-clean.ps1
@@ -227,6 +230,22 @@ QUEUE | row=19 | needs=dispatch | SEVERITY=quality | found by the dispatcher's a
     screenshot) when one exists, leaving the inventory authoritative for records that are in
     it. One branch in the generator plus a pin. Directly serves the owner's "the publish
     skill is the new base for app discovery".
+
+QUEUE | row=20 | needs=OWNER | strategic — NO work today, but it must not be discovered late
+  | THE HUB'S OWN HOME. If `futuremagic.de` is eventually forwarded to
+    `apps.futuremagic.de` (ledger row 8), the hub — which is served FROM `futuremagic.de` —
+    has no home unless it moves too. The final forward is a one-way act that would otherwise
+    take the hub down together with the old site.
+  | CONSEQUENCE IF THE HUB MOVES: `vite.config.ts` `base: '/'` and every root-relative path
+    (`/apps.index.json`, `/stories.json`, `/shots/*.png`, `/favicon.svg`) become subpath
+    paths — exactly the case the publish skill's step 2 warns about.
+  | TRANSITIONAL COUPLING, WITH AN EXPIRY: the generator reads each un-migrated app's
+    manifesto from the OLD host at build time (`HUB_BASE`, scripts/generate-app-index.mjs:56).
+    That read is what keeps a frozen app's tagline/tags/screenshot on its card; it expires
+    harmlessly — a WARNING, never fatal — when the last app migrates or the old site forwards.
+  | ANSWER NEEDED: is the hub part of the frozen old site, or does it move to the new host
+    first? RECOMMENDED for planning: assume the hub MOVES, since it is the only thing that
+    can become the new site's front door — and build nothing today that assumes otherwise.
 
 TRAP | gate-summary-swallowed | MEASURED 2026-09-21, self-inflicted
   | The first scripts/gate.sh ran its body inside a `{ ... } > "$LOG"` group. `exit`
