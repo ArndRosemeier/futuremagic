@@ -74,6 +74,20 @@ PROBE | probe=5e18d0c9-aa0c-4075-b125-3a0201c78e94 | read-only
     cards. The real order is featured-then-title (src/registry.ts:138-141). See the TRAP
     below. Its decisive find: the migration is achievable with ZERO source changes.
 
+IN-FLIGHT | row=7 | writer=session (dispatched by the chief of staff) | branch=feat/app-index
+  | worktree=/home/administrator/projects/futuremagic/worktrees/app-index
+  | base=8453085 | state=dispatched, no commit yet
+  | scope=THE GENERATED INDEX (docs/21 §8, owner-approved F1(a) + F2(a)): a build-time
+    generator that discovers apps from the apps host's folder listing and folds each app's
+    manifesto inline into the hub's own SAME-ORIGIN index, so the runtime stops depending on
+    a cross-origin fetch that CORS blocks. Plus: optional `updatedAt` so absence is honest
+    instead of a dropped app, a loud failure when the host is unreachable, and the gate
+    running what the deploy runs.
+  | owner's words=verbatim "i go with your recommendations." (F1(a) generated same-origin
+    index; F2(a) staged per-record migration)
+  | note=the legacy server-side /apps.json is NOT decommissioned in this slice; the hub
+    simply stops reading it. Retiring it is queue rows 12/13/16.
+
 LANDED | row=2-6 (ledger rows 2-6) | sha=1040796 | branch=master | base=6e9a6e1
   | verify=MY OWN, on the COMMITTED tree and with the COMMITTED script: gate FULL GREEN
     exit 0 (typecheck exit 0; vite build exit 0, 9 modules, 237-284ms; raw log
@@ -102,13 +116,16 @@ VERIFY | sha=5fa6a23 (docs-only delta from the gated tip 1040796)
     suite; this one was run anyway because it costs ~1s, which makes the final tree's
     state a MEASUREMENT rather than an inference.
 
-QUEUE | row=7 | needs=dispatch | SEVERITY=DANGEROUS
-  | Registry clobber. deploy-clean.ps1:210-215 skips apps.json/stories.json only when the
-    live FTP listing already has them ($names, :169-173). Against a -RemotePath with no
-    registry, the repo's STALE public/apps.json (3 apps) and EMPTY public/stories.json
-    ship as live. Live today = 12 apps / 3 stories (fetched 2026-09-21).
-  | fix direction=make the absence of a remote registry a LOUD STOP (or require an
-    explicit -AllowRegistrySeed), never a silent seed from a stale shadow.
+QUEUE-CLOSED | row=7 | CONSUMED by ledger row 7 (the generated index, IN-FLIGHT above)
+  | The clobber hazard dies BY CONSTRUCTION rather than by a guard: once `public/apps.json`
+    is GENERATED from the apps host, there is no stale hand-maintained shadow left to ship.
+    The old protection (`deploy-clean.ps1:210-215`) is left untouched and becomes harmless.
+  | was: needs=dispatch, SEVERITY=DANGEROUS -- registry clobber: the deploy skipped
+    apps.json/stories.json only when the remote already had them ($names, :169-173), so
+    against a -RemotePath with no registry the repo's STALE public/apps.json (3 apps) and
+    EMPTY public/stories.json shipped as live (live = 12 apps / 3 stories, fetched).
+  | NOTE: `stories.json` is UNCHANGED and still hand-managed -- the Story Manager owns it and
+    this slice does not touch it, so its half of the hazard remains open (queue row 18).
 
 QUEUE | row=8 | needs=dispatch
   | Register-FuturemagicApp.ps1:170-190 re-stamps `manifesto` from LOCAL file presence, so
@@ -172,6 +189,21 @@ QUEUE | row=16 | needs=OWNER | blocks=the apps-host migration (docs/21)
   | WAITING ON: the owner answering F1 and F2 (docs/21 §8), plus the metadata-contract and
     ~/apps-permanence questions in §10.
 
+QUEUE | row=17 | needs=dispatch AFTER row 7 lands
+  | The FIRST staged migration (F2(a)). `expert` and `fracvibe` are already published on
+    apps.futuremagic.de; `Expert` is one of the live 12 (path /Expert/) and `fracvibe` is not
+    in the registry at all. Migrate `Expert`'s record to the new host and decide whether
+    `fracvibe` becomes a card. This is the DATA edit the generated index makes cheap.
+  | BLOCKED ON row 7: it edits the inventory file that row 7 creates.
+
+QUEUE | row=18 | needs=dispatch | SEVERITY=DANGEROUS (the survivor of old row 7)
+  | `stories.json` has the SAME clobber shape that row 7 fixed for apps: deploy-clean.ps1
+    skips it only when the remote file exists (:210-215, $ProtectedRegistryFiles :32), so
+    against a -RemotePath without one, the repo's nearly-empty public/stories.json (0 stories
+    vs 3 live) ships as live. Deliberately NOT fixed in row 7 (the Story Manager owns that
+    file and the publish path is Python/FTP). fix direction=the same treatment: make the
+    absence of a remote registry a LOUD STOP, never a silent seed from a stale shadow.
+
 TRAP | gate-summary-swallowed | MEASURED 2026-09-21, self-inflicted
   | The first scripts/gate.sh ran its body inside a `{ ... } > "$LOG"` group. `exit`
     inside that group exits the WHOLE script, so the run returned a CORRECT exit code
@@ -213,6 +245,37 @@ TRAP | stories-order-applied-to-app-cards | MEASURED 2026-09-21, self-inflicted
     it was a TRUE fact about a DIFFERENT list, carried across. RULE: before reusing a
     finding, re-read the line it came from and confirm it is about the thing you are
     describing. A neighbouring fact is the easiest wrong fact to believe.
+
+TRAP | generated-index-would-never-ship | CAUGHT IN DISPATCHER PREP 2026-09-21
+  | The approved design was "generate the hub's index at build time". Read in place, the
+    deploy makes that SILENTLY INEFFECTIVE: deploy-clean.ps1:148-150 hard-asserts
+    `dist/apps.json` EXISTS (so the file must be named apps.json or the deploy throws), while
+    :210-215 SKIPS uploading apps.json whenever the live FTP root already contains one
+    (`$names`, built :169-173) -- and it does. A generated index at that path would be
+    required to exist and forbidden to ship, and nothing would have reported it: the hub
+    would keep serving the old server-managed registry and look fine.
+  | RESOLUTION (dispatcher's decision, owner may overturn): the runtime index is a NEW name,
+    `apps.index.json`, which the deploy does not protect and therefore uploads normally; the
+    generator ALSO writes a byte-identical `public/apps.json` purely to satisfy :148 and keep
+    the Windows deploy untouched, because that script CANNOT be executed or verified on this
+    host (no pwsh -- queue row 13). Recorded as a COPIES: line with a named exit condition.
+  | RULE: before building an artifact, read the path it will travel to its destination. An
+    artifact that is generated, required and skipped is worse than none, because it looks
+    done.
+
+TRAP | gate-built-the-main-tree | MEASURED 2026-09-21, self-inflicted, caught in PREP
+  | scripts/gate.sh derived MAIN from `git rev-parse --git-common-dir` for the shared lock
+    and log -- correct -- and then `cd "$MAIN"` to RUN the checks. Invoked from a writer's
+    worktree that gates the MAIN tree, so a writer would have been handed a GREEN for a tree
+    it never touched, while its own slice could be broken. Caught while preparing the first
+    parallel writer, BEFORE any writer depended on it.
+  | FIX: MAIN stays the lock/log root; TREE = `git rev-parse --show-toplevel` is where the
+    checks run, and the log names both. VERIFIED by invoking the gate from the worktree:
+    tree=.../worktrees/app-index, typecheck exit 0, build exit 0, while the lock and log
+    stayed in the main tree.
+  | RULE: the lock belongs to the SHARED repo, the check belongs to the TREE YOU ARE IN.
+    Two paths, two variables. This is the same failure family as a check that cannot look:
+    it LOOKS like it passed.
 
 GUARD | gate-lock | mkdir-based, path=<main>/.futuremagic-lock derived from the git COMMON
   dir so every worktree shares ONE lock; owner file names pid/time/worktree/tier; a DEAD

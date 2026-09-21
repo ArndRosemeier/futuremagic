@@ -62,15 +62,23 @@
 #                  so a background run's evidence outlives the process.
 set -uo pipefail
 
-# --- where is the MAIN tree (not the worktree we may have been called from) ----
-# `git rev-parse --git-common-dir` resolves to the main tree's .git even from a
-# linked worktree, so both the lock and the log dir are the same path everywhere.
+# --- TWO locations, and conflating them was a real bug ------------------------
+# MAIN  = the repository root, where the SHARED lock and log live.
+#         It must be the same path from every worktree, or two writers' gates would
+#         take two different locks and exclude nothing.
+# TREE  = the tree the gate was INVOKED in — the main tree, or a writer's worktree.
+#         THE CHECKS MUST RUN HERE. The first version of this script `cd`'d to MAIN
+#         and built there, so a writer running the gate from its worktree would have
+#         gated the MAIN tree and been handed a GREEN result for a tree it never
+#         touched. MEASURED 2026-09-21 during parallel-writer prep.
 _common="$(git rev-parse --git-common-dir 2>/dev/null)"
 if [ -z "$_common" ]; then
   echo "gate.sh: not inside a git work tree — refusing to guess a lock path" >&2
   exit 1
 fi
 MAIN="$(cd "$(dirname "$_common")" && pwd)"
+TREE="$(git rev-parse --show-toplevel 2>/dev/null)"
+[ -n "$TREE" ] || TREE="$MAIN"
 
 LOCK="${GATE_LOCK:-$MAIN/.futuremagic-lock}"
 LOGDIR="${GATE_LOGDIR:-$MAIN/.gate-logs}"
@@ -155,13 +163,14 @@ echo "load: $(cut -d' ' -f1-3 /proc/loadavg)"
 # exit code with NO evidence and no log path for the operator. MEASURED 2026-09-21.
 run_gate() {
   echo "=== futuremagic gate · tier=$TIER · $(date -Is) ==="
-  echo "tree=$MAIN ($(git rev-parse --short HEAD) on $(git rev-parse --abbrev-ref HEAD))"
+  echo "tree=$TREE ($(git rev-parse --short HEAD) on $(git rev-parse --abbrev-ref HEAD))"
+  [ "$TREE" = "$MAIN" ] || echo "main tree=$MAIN (the lock and logs live here, shared by every worktree)"
   echo "lock=$LOCK log=$LOG"
   echo
 
-  if [ ! -d "$MAIN/node_modules" ]; then
-    echo "FATAL: $MAIN/node_modules is missing — run 'npm ci' first (the gate does"
-    echo "not install dependencies, so a gate can never mutate the tree it checks)."
+  if [ ! -d "$TREE/node_modules" ]; then
+    echo "FATAL: $TREE/node_modules is missing — run 'npm ci' in THAT tree first (the"
+    echo "gate does not install dependencies, so a gate can never mutate the tree it checks)."
     echo "EXIT=1 (RED)"
     return 1
   fi
@@ -199,7 +208,7 @@ run_gate() {
   return 0
 }
 
-cd "$MAIN" || exit 1
+cd "$TREE" || exit 1
 run_gate > "$LOG" 2>&1
 RC=$?
 
