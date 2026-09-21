@@ -74,6 +74,21 @@ PROBE | probe=5e18d0c9-aa0c-4075-b125-3a0201c78e94 | read-only
     cards. The real order is featured-then-title (src/registry.ts:138-141). See the TRAP
     below. Its decisive find: the migration is achievable with ZERO source changes.
 
+IN-FLIGHT | row=9 | writer=dispatched by the chief of staff | branch=feat/published-only
+  | worktree=/home/administrator/projects/futuremagic/worktrees/published-only
+  | base=9b77d25 | state=dispatched, no commit yet
+  | scope=THE GRID MIRRORS THE HOST (owner decision, ledger row 9): the generator discovers
+    ONLY from apps.futuremagic.de, and the grid is EXACTLY the published folders; the
+    inventory becomes an editorial OVERLAY (slug/title/updatedAt — NO path) that supplies
+    titles and dates only for apps that ARE published; every card is enriched from its own
+    manifesto; and the generator makes NO request to the old host.
+  | owner's words=verbatim "apps.futuremagic.de should show the apps that are published
+    under apps. Just as they are, no relation to the old site.", then choosing "Only what's
+    published under ~/apps".
+  | EXPECTED VISIBLE OUTCOME: the grid goes from 13 cards to 2 (expert, fracvibe). The 10
+    old-site apps stay reachable at their old URLs but are no longer listed — which is the
+    owner's explicit choice, not an oversight.
+
 LANDED | row=7 (ledger row 7) | sha=8aa77c5 | branch=feat/app-index → fast-forwarded into
   master, so 8aa77c5 IS master | base=8453085
   | verify=MY OWN, on the INTEGRATED master tree: gate FULL exit 0 — `npm run build`
@@ -183,6 +198,19 @@ QUEUE | row=15 | needs=OWNER
     ENTIRE safety net, so a behaviour regression that still compiles is invisible. Decide
     whether the hub earns a test harness; if yes, that harness is itself a slice and
     docs/08-TESTING.md gets created by it.
+
+QUEUE-CLOSED | row=17 | CONSUMED by the owner's decision of 2026-09-21 (ledger row 9)
+  | There is no longer a per-app MIGRATION to perform. The owner chose: the hub's grid lists
+    ONLY what is published under ~/apps. So `expert` — already published — becomes a new-host
+    card BY CONSTRUCTION, the 10 old-site apps leave the grid while their old copies stay
+    serviceable, and `fracvibe` needs an editorial TITLE in the overlay rather than a
+    migration. The trigger rule this row defined ("migrate the card when you republish")
+    becomes automatic and cannot be forgotten.
+
+QUEUE-CLOSED | row=19 | DISSOLVED by the owner's decision (ledger row 9)
+  | The gap was "a DISCOVERED folder is never enriched and keeps its raw folder name". Once
+    the grid IS the discovered set, every card is fetched and enriched, so the gap cannot
+    exist. Replaced by an explicit precedence: manifesto title > overlay title > folder name.
 
 QUEUE-CLOSED | row=16 | CONSUMED by ledger row 7 (F1(a)+F2(a) built and verified) and
   | ledger row 8 (the two-sites strategy)
