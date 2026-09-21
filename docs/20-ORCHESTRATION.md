@@ -177,6 +177,20 @@ QUEUE | row=14 | needs=OWNER | an APP-side and INFRASTRUCTURE matter, NOT this r
     publish; (c) wait out the 4-hour TTL. FracVibe is ANOTHER PROJECT with another session
     active in it — the dispatcher will not touch it.
 
+QUEUE | row=15 | needs=OWNER | INFRASTRUCTURE, not this repo — but it bit us once today
+  | THE APPS HOST HAS NO SUPERVISOR. It is a bare
+    `python3 -m http.server 8082 --bind 127.0.0.1 --directory /home/administrator/apps`,
+    spawned by the DSH auth proxy (ppid 883163), behind Cloudflare. EVIDENCE that nothing
+    restarts it: when the writer killed it, it did NOT come back on its own — the writer had
+    to start it again by hand. So if that process ever dies unattended, the apps host serves
+    5xx for every UNCACHED path (`.html`/`.json` are `cf-cache-status: DYNAMIC`) with nothing
+    to bring it back.
+  | CONSEQUENCE FOR THIS PROJECT: the hub's `index.html` and `apps.index.json` are exactly the
+    uncached paths, so a dead origin makes `apps.futuremagic.de/` fail while cached `.js`
+    beside it still loads — a half-dead site that looks like an app bug.
+  | fix direction=put that one process under a supervisor (or serve the root from something
+    that restarts itself). Owner's call; recorded here because this repo now depends on it.
+
 LANDED | row=9 (ledger row 9) | sha=72e62f7 | branch=feat/published-only → rebased onto
   master's 50a8919 and fast-forwarded, so 72e62f7 IS master
   | verify=MY OWN, on the INTEGRATED tree: gate FULL exit 0 — `npm run build` (generator +
