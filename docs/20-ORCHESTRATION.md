@@ -74,6 +74,37 @@ PROBE | probe=5e18d0c9-aa0c-4075-b125-3a0201c78e94 | read-only
     cards. The real order is featured-then-title (src/registry.ts:138-141). See the TRAP
     below. Its decisive find: the migration is achievable with ZERO source changes.
 
+IN-FLIGHT | row=10 | writer=TO BE DISPATCHED | branch=feat/apps-root
+  | scope=THE HUB AT THE APPS ROOT (owner decision, ledger row 10): publish this hub so that
+    `https://apps.futuremagic.de/` IS the hub, and move discovery to the LOCAL apps root so
+    that the hub's own index.html cannot blind it.
+  | owner's words=verbatim "Please deploy that on the apps root so that apps.futuremagic.de
+    resolves to this."
+  | DELIVERABLES: (1) the generator discovers and enriches from the LOCAL apps root
+    (`APPS_ROOT_DIR`, default `$HOME/apps`) instead of fetching the root listing, so the build
+    needs NO network at all and the shadowing failure is impossible BY CONSTRUCTION; an app is
+    a top-level DIRECTORY CONTAINING `index.html` (what the static host requires to serve it),
+    and a directory without one is reported under `ignored (no index.html)` rather than warned
+    about, because the hub's own `assets/` and `shots/` will sit there; `APPS_HOST_BASE` stays,
+    but only to build each card's public URL. (2) `scripts/publish-apps-root.sh` to publish
+    `dist/` into the apps root WITHOUT deleting anything (no `--delete`: the app folders are
+    not ours). (3) docs + pins. The dispatcher performs the one real install after verifying.
+  | MEASURED BLOCKER this slice exists to remove: see the TRAP below.
+
+TRAP | hub-at-the-root-blinds-discovery | MEASURED 2026-09-21, caught BEFORE the install
+  | `python -m http.server` serves a directory's `index.html` INSTEAD of its auto-generated
+    listing once that file exists. VERIFIED with a throwaway server: a directory listing
+    appeared for `/` until an `index.html` was written, after which `/` returned that file.
+    The hub's OWN built `dist/index.html` yields **0** `<a href="…/">` folder anchors and no
+    `Directory listing for` marker.
+  | So deploying the hub at the apps root would make the generator's HTTP discovery find ZERO
+    apps — and it would NOT fail: the fetch returns HTTP 200, the index is written with no
+    cards, and the GATE STILL GOES GREEN while the live hub shows nothing. That is the same
+    family as `generated-index-would-never-ship` above: a green result over a dead outcome.
+  | RULE: before making a program the consumer of its own input, check which of the two will
+    read the other first. Here the published artifact would have overwritten the directory the
+    discovery step reads.
+
 LANDED | row=9 (ledger row 9) | sha=72e62f7 | branch=feat/published-only → rebased onto
   master's 50a8919 and fast-forwarded, so 72e62f7 IS master
   | verify=MY OWN, on the INTEGRATED tree: gate FULL exit 0 — `npm run build` (generator +
@@ -255,7 +286,18 @@ QUEUE | row=18 | needs=dispatch | SEVERITY=DANGEROUS (the survivor of old row 7)
     file and the publish path is Python/FTP). fix direction=the same treatment: make the
     absence of a remote registry a LOUD STOP, never a silent seed from a stale shadow.
 
-QUEUE | row=20 | needs=OWNER | strategic — NO work today, but it must not be discovered late
+QUEUE-CLOSED | row=20 | ANSWERED by the owner 2026-09-21: the hub goes to the APPS ROOT
+  | Owner, verbatim: "Please deploy that on the apps root so that apps.futuremagic.de resolves
+    to this." So the hub MOVES to the new host — as the ROOT itself, not a `/hub/` subfolder —
+    while `futuremagic.de` keeps serving the old site until the late forward. The `base: '/'`
+    question resolves itself: at a root, root-relative paths are already correct.
+  | CONSEQUENCE: the hub's index.html removes the apps root's directory listing, which is what
+    the generator currently discovers from — so discovery moves to the LOCAL apps root. See
+    IN-FLIGHT | row=10 and the TRAP above it.
+  | CARRIED FORWARD, still true: root-absolute app asset paths (`/assets/…`) collide with the
+    HUB's own `/assets/` now that both live at the apps root — the publish skill's step 2
+    already tells every app to use a `/<name>/` base, and this is why.
+  | was: needs=OWNER — where does the hub live once the old site is forwarded?
   | THE HUB'S OWN HOME. If `futuremagic.de` is eventually forwarded to
     `apps.futuremagic.de` (ledger row 8), the hub — which is served FROM `futuremagic.de` —
     has no home unless it moves too. The final forward is a one-way act that would otherwise
