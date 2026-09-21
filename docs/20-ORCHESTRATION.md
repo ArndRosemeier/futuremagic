@@ -41,7 +41,7 @@ dispatching anything.
 ## Board
 
 ```
-reconciled: 593174d · 2026-09-21T16:5x+02:00 (session-13ea3b42, chief of staff)
+reconciled: 72e62f7 · 2026-09-21T17:0x+02:00 (session-13ea3b42, chief of staff)
 
 SESSION | cos=session-13ea3b42-847e-4025-97fa-e6aa5b169aba | model=deepseek-flash
   | role=chief of staff (designated by the owner 2026-09-21) | state=active
@@ -74,20 +74,34 @@ PROBE | probe=5e18d0c9-aa0c-4075-b125-3a0201c78e94 | read-only
     cards. The real order is featured-then-title (src/registry.ts:138-141). See the TRAP
     below. Its decisive find: the migration is achievable with ZERO source changes.
 
-IN-FLIGHT | row=9 | writer=dispatched by the chief of staff | branch=feat/published-only
-  | worktree=/home/administrator/projects/futuremagic/worktrees/published-only
-  | base=9b77d25 | state=dispatched, no commit yet
-  | scope=THE GRID MIRRORS THE HOST (owner decision, ledger row 9): the generator discovers
-    ONLY from apps.futuremagic.de, and the grid is EXACTLY the published folders; the
-    inventory becomes an editorial OVERLAY (slug/title/updatedAt — NO path) that supplies
-    titles and dates only for apps that ARE published; every card is enriched from its own
-    manifesto; and the generator makes NO request to the old host.
-  | owner's words=verbatim "apps.futuremagic.de should show the apps that are published
-    under apps. Just as they are, no relation to the old site.", then choosing "Only what's
-    published under ~/apps".
-  | EXPECTED VISIBLE OUTCOME: the grid goes from 13 cards to 2 (expert, fracvibe). The 10
-    old-site apps stay reachable at their old URLs but are no longer listed — which is the
-    owner's explicit choice, not an oversight.
+LANDED | row=9 (ledger row 9) | sha=72e62f7 | branch=feat/published-only → rebased onto
+  master's 50a8919 and fast-forwarded, so 72e62f7 IS master
+  | verify=MY OWN, on the INTEGRATED tree: gate FULL exit 0 — `npm run build` (generator +
+    typecheck + vite build). The REAL generated index is 2 cards and contains **no old-host
+    URL anywhere**: `expert` (title/tagline/tags/screenshot from its manifesto, `updatedAt`
+    from the overlay) and `fracvibe` (overlay title "FracVibe", no enrichment, NO date key).
+    Dormant overlay entries named: **11**. Raw log .gate-logs/gate-20260921T165953.log.
+  | MY OWN DIFFERENTIAL — arms the WRITER did not run, offline fixture, hash printed
+    (`/tmp/mydiff2`, H_A=03c15291…):
+      A baseline — a `my%20app/` listing entry is DECODED into a card (`my app`), while a FILE
+        entry (`README.md`) and an ABSOLUTE-URL entry (`https://evil.example/…`) are both
+        refused; every emitted `path` is on the apps host and no other host appears anywhere
+        in the index.
+      B an overlay slug in a DIFFERENT CASE (`ALPHA` vs folder `alpha`) still matches. The
+        index is byte-identical to A — EXPECTED, since only the input's casing changed; B1's
+        assertion is the title, so this is not a void arm.
+      C an EMPTY-STRING manifesto title falls through to the overlay, enrichment kept.
+      D date honesty — a published app WITH an overlay date carries it, one without has NO
+        key, and a DORMANT overlay entry produces NO card.
+  | retired=writer session, worktree `worktrees/published-only`, branch `feat/published-only`.
+  | DISPATCHER'S OWN ERRORS, recorded: (i) this brief named base=50a8919, but the worktree had
+    been created from 9b77d25 BEFORE that board commit existed, so the branch was a SIBLING of
+    50a8919 rather than a descendant — the writer reported it and the branch was rebased
+    before the gate; (ii) the brief said "the 10 old-site apps leave the grid"; the true count
+    is **11** (12 old-site records minus published `expert`), which the writer's own count
+    corrected and this record now states.
+  | note=the hub lists ONLY published apps. The 11 old-site copies stay serviceable and
+    UNLISTED (all 12 answer 200, measured). Nothing is deployed.
 
 LANDED | row=7 (ledger row 7) | sha=8aa77c5 | branch=feat/app-index → fast-forwarded into
   master, so 8aa77c5 IS master | base=8453085
@@ -113,6 +127,9 @@ LANDED | row=7 (ledger row 7) | sha=8aa77c5 | branch=feat/app-index → fast-for
   | push=NO, by design (AGENTS §6).
   | note=the hub now reads `/apps.index.json`; the legacy server-side `/apps.json` is NOT
     decommissioned and is now read by nothing. Retiring it is queue rows 12/13/16.
+  | SUPERSEDED by ledger row 9: this record is HISTORY and is true only of `8aa77c5`. The
+    grid it describes (13 cards from an inventory) no longer exists — the grid is now the
+    published set (2 cards). Do not read its counts as current.
 
 LANDED | row=2-6 (ledger rows 2-6) | sha=1040796 | branch=master | base=6e9a6e1
   | verify=MY OWN, on the COMMITTED tree and with the COMMITTED script: gate FULL GREEN
@@ -202,15 +219,23 @@ QUEUE | row=15 | needs=OWNER
 QUEUE-CLOSED | row=17 | CONSUMED by the owner's decision of 2026-09-21 (ledger row 9)
   | There is no longer a per-app MIGRATION to perform. The owner chose: the hub's grid lists
     ONLY what is published under ~/apps. So `expert` — already published — becomes a new-host
-    card BY CONSTRUCTION, the 10 old-site apps leave the grid while their old copies stay
-    serviceable, and `fracvibe` needs an editorial TITLE in the overlay rather than a
-    migration. The trigger rule this row defined ("migrate the card when you republish")
-    becomes automatic and cannot be forgotten.
+    card BY CONSTRUCTION, the **11** old-site apps leave the grid while their old copies stay
+    serviceable, and `fracvibe` gets an editorial TITLE in the overlay rather than a migration
+    (done: `seed/apps.overlay.json` entry "FracVibe"). The trigger rule this row defined
+    ("migrate the card when you republish") becomes automatic and cannot be forgotten.
+  | CARRIED FORWARD from this row, still worth knowing: the two `Expert` copies are NOT the
+    same build (new host `main-B30ZL_cX.js`, old host `main-BgCco9IA.js`), so the card now
+    shows the NEW host's build — the local `dist` built 2026-09-21 15:57. There is no longer a
+    "flip" to approve; it followed from the owner's decision.
 
 QUEUE-CLOSED | row=19 | DISSOLVED by the owner's decision (ledger row 9)
   | The gap was "a DISCOVERED folder is never enriched and keeps its raw folder name". Once
     the grid IS the discovered set, every card is fetched and enriched, so the gap cannot
     exist. Replaced by an explicit precedence: manifesto title > overlay title > folder name.
+  | MEASURED EVIDENCE the gap was real (kept for history): with the old generator, a valid
+    manifesto at the discovered fixture folder `newapp/futuremagic.json` still produced a card
+    with NO `tagline`. The new model enriches it — verified by dispatcher arm A, where the
+    discovered `my app` and `newapp` folders are fetched (`found 1, missing 3`).
 
 QUEUE-CLOSED | row=16 | CONSUMED by ledger row 7 (F1(a)+F2(a) built and verified) and
   | ledger row 8 (the two-sites strategy)
@@ -222,22 +247,6 @@ QUEUE-CLOSED | row=16 | CONSUMED by ledger row 7 (F1(a)+F2(a) built and verified
     `$ProtectedDirs` list and `seed/manifestos/` are now PARK-UNTIL-FORWARD (ledger row 8):
     do not churn them and do not edit the Windows deploy script for them.
 
-QUEUE | row=17 | needs=dispatch | BLOCKED only on the owner's yes on the build
-  | THE FIRST MIGRATION (F2(a)) — and it sets the TRIGGER RULE for every later one. Ledger
-    row 8 fixes the rule: migrate an app's card WHEN that app is (re)published to the new
-    host, because until the card moves it shows the FROZEN old copy, so republishing without
-    migrating would silently show a stale app.
-  | `expert` and `fracvibe` are already on the new host. `Expert` is one of the live 12;
-    `fracvibe` is not in the inventory at all.
-  | MEASURED: the two `Expert` copies are NOT the same build — new host
-    `main-B30ZL_cX.js`, old host `main-BgCco9IA.js` — so flipping the link switches builds.
-    The new host serves the local `dist` built 2026-09-21 15:57. OWNER: confirm THAT is the
-    build to show before I flip it.
-  | ALSO: give `fracvibe` a proper title by adding it to `seed/apps.inventory.json`; its
-    manifesto 404s, so discovery alone would show it as a lowercase folder name (row 19).
-  | Both are DATA edits to the inventory — no source change. The old copies stay untouched
-    and serviceable (all 12 answer 200, measured).
-
 QUEUE | row=18 | needs=dispatch | SEVERITY=DANGEROUS (the survivor of old row 7)
   | `stories.json` has the SAME clobber shape that row 7 fixed for apps: deploy-clean.ps1
     skips it only when the remote file exists (:210-215, $ProtectedRegistryFiles :32), so
@@ -245,19 +254,6 @@ QUEUE | row=18 | needs=dispatch | SEVERITY=DANGEROUS (the survivor of old row 7)
     vs 3 live) ships as live. Deliberately NOT fixed in row 7 (the Story Manager owns that
     file and the publish path is Python/FTP). fix direction=the same treatment: make the
     absence of a remote registry a LOUD STOP, never a silent seed from a stale shadow.
-
-QUEUE | row=19 | needs=dispatch | SEVERITY=quality | found by the dispatcher's arm A
-  | A folder DISCOVERED on the apps host is NEVER enriched and its title is the RAW FOLDER
-    NAME, even when it ships a `futuremagic.json`: the generator fetches manifestos only for
-    INVENTORY records (scripts/generate-app-index.mjs:201 and :242-257). So a newly published
-    app shows up as `fracvibe` — lowercase, no tagline, no tags, no screenshot — until someone
-    adds it to `seed/apps.inventory.json`.
-  | MEASURED, not inferred: differential arm A put a valid manifesto at the discovered
-    fixture folder `newapp/futuremagic.json` and the card came out with NO `tagline`.
-  | RECOMMENDED: for a DISCOVERED record only, use its manifesto (title/tagline/tags/
-    screenshot) when one exists, leaving the inventory authoritative for records that are in
-    it. One branch in the generator plus a pin. Directly serves the owner's "the publish
-    skill is the new base for app discovery".
 
 QUEUE | row=20 | needs=OWNER | strategic — NO work today, but it must not be discovered late
   | THE HUB'S OWN HOME. If `futuremagic.de` is eventually forwarded to
@@ -267,10 +263,11 @@ QUEUE | row=20 | needs=OWNER | strategic — NO work today, but it must not be d
   | CONSEQUENCE IF THE HUB MOVES: `vite.config.ts` `base: '/'` and every root-relative path
     (`/apps.index.json`, `/stories.json`, `/shots/*.png`, `/favicon.svg`) become subpath
     paths — exactly the case the publish skill's step 2 warns about.
-  | TRANSITIONAL COUPLING, WITH AN EXPIRY: the generator reads each un-migrated app's
-    manifesto from the OLD host at build time (`HUB_BASE`, scripts/generate-app-index.mjs:56).
-    That read is what keeps a frozen app's tagline/tags/screenshot on its card; it expires
-    harmlessly — a WARNING, never fatal — when the last app migrates or the old site forwards.
+  | OLD-HOST COUPLING: **GONE as of ledger row 9.** The generator no longer reads anything
+    from `futuremagic.de` — `HUB_BASE` was deleted, the inventory's `path` fields are gone,
+    and every fetch goes to the apps host (dispatcher arm A: every emitted `path` is on the
+    apps host and no other host appears anywhere in the index). This row's earlier "the
+    generator reads the old host's manifestos" paragraph is therefore RETRACTED, not stale.
   | ANSWER NEEDED: is the hub part of the frozen old site, or does it move to the new host
     first? RECOMMENDED for planning: assume the hub MOVES, since it is the only thing that
     can become the new site's front door — and build nothing today that assumes otherwise.
