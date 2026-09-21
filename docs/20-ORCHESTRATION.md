@@ -85,6 +85,12 @@ LANDED | row=2-6 (ledger rows 2-6) | sha=1040796 | branch=master | base=6e9a6e1
     this record, because Campaigner's "landed = pushed" check would have flagged this
     landing stale on every future local landing here.
 
+VERIFY | sha=5fa6a23 (docs-only delta from the gated tip 1040796)
+  | Gate FULL GREEN exit 0 on the FINAL tree: typecheck exit 0, vite build exit 0. Raw
+    log .gate-logs/gate-20260921T160623.log. A docs-only commit does not re-run the
+    suite; this one was run anyway because it costs ~1s, which makes the final tree's
+    state a MEASUREMENT rather than an inference.
+
 QUEUE | row=7 | needs=dispatch | SEVERITY=DANGEROUS
   | Registry clobber. deploy-clean.ps1:210-215 skips apps.json/stories.json only when the
     live FTP listing already has them ($names, :169-173). Against a -RemotePath with no
@@ -164,6 +170,14 @@ TRAP | gate-piped-through-tail | INHERITED
 TRAP | relative-path-edits-the-main-tree | INHERITED
   | File tools resolve RELATIVE paths against the MAIN tree, so a writer's slice landed
     there while its own worktree sat clean. RULE: every path in a brief is ABSOLUTE.
+
+TRAP | gate-output-piped-through-grep | MEASURED 2026-09-21, self-inflicted
+  | While reporting, the dispatcher ran `bash scripts/gate.sh | grep -E ...` to trim the
+    output -- the exact anti-pattern AGENTS §1 forbids, because a pipeline's exit status
+    is the LAST command's, so that invocation reported GREP's success, not the gate's.
+    The true exit was then captured by re-running the gate unpiped (exit 0). RULE: the
+    gate's raw output goes to its log and the log is what gets read; never filter the
+    gate itself, not even for display.
 
 GUARD | gate-lock | mkdir-based, path=<main>/.futuremagic-lock derived from the git COMMON
   dir so every worktree shares ONE lock; owner file names pid/time/worktree/tier; a DEAD
