@@ -246,6 +246,23 @@ QUEUE | row=20 | needs=OWNER | strategic — NO work today, but it must not be d
   | ANSWER NEEDED: is the hub part of the frozen old site, or does it move to the new host
     first? RECOMMENDED for planning: assume the hub MOVES, since it is the only thing that
     can become the new site's front door — and build nothing today that assumes otherwise.
+  | VERIFIED 2026-09-21, testing the owner's requirement "no relation to the old site":
+    NOTHING published under `~/apps` references the old site. The only file matching
+    "futuremagic.de" is `~/apps/README.md`, and its match is `apps.futuremagic.de` — the NEW
+    host, its own name. `expert/` references subpath assets (`/expert/assets/…`), `fracvibe/`
+    references relative ones (`app.js`, `styles.css`). The new host is already self-contained.
+
+QUEUE | row=21 | needs=OWNER (an APP-side fix, NOT this repo)
+  | `expert/futuremagic.json` — which ships from the Expert repo's `public/` — sets
+    `"screenshot": "/shots/Expert.png"`, a ROOT-ABSOLUTE path. On the new host that resolves
+    to `https://apps.futuremagic.de/shots/Expert.png` → **404** (measured); it is 200 only on
+    the old host. It works on the hub today only because the hub builds against the OLD
+    origin, so the `<img>` resolves there (`resolveScreenshotUrl` returns `/…` verbatim).
+  | CONSEQUENCE: this is the exact class of coupling the owner just ruled out, and it is the
+    FIRST thing that breaks if the hub ever moves to the new host (row 20).
+  | FIX SIDE: the Expert repo's `public/futuremagic.json` — a relative path (e.g.
+    `"screenshot": "shot.png"` beside the app) or an absolute new-host URL. Do NOT paper over
+    it in this repo.
 
 TRAP | gate-summary-swallowed | MEASURED 2026-09-21, self-inflicted
   | The first scripts/gate.sh ran its body inside a `{ ... } > "$LOG"` group. `exit`
