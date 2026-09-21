@@ -22,13 +22,13 @@ deltas below in the same landing.
 |---|---|---|---|
 | Default branch | `main` | **`master`** | The remote's default is `master`. Every `origin/main` in the reference doc means `origin/master` here. |
 | Suite | ~4431 vitest tests, ~12 min | **NONE** | 44 tracked files, two devDeps. There is nothing to chunk, cap or skip. |
-| Gate | `scripts/gate.sh`, two tiers, memory watchdog | **`scripts/gate.sh`**, two tiers, no watchdog | Same exit-code vocabulary. The FULL tier runs the deploy's OWN command, `npm run build` = **generated app index + `tsc` + `vite build`** — so the gate covers the generator too. It is no longer purely offline: the generator fetches `apps.futuremagic.de` (and **no other host** — ledger row 9 deleted the old-site `HUB_BASE` read), so an unreachable apps host is a RED gate (the generator writes nothing until every fetch succeeds). The local compile+bundle is still ~250ms. The header of that script states what is deliberately NOT ported and why. |
-| Hub app list | (no equivalent) | **GENERATED at build time** by `scripts/generate-app-index.mjs` from the apps host's folder listing (DISCOVERY — the ONLY source of existence) + `seed/apps.overlay.json` (EDITORIAL decoration only: `title`/`updatedAt`), folding each published folder's `futuremagic.json` inline | `docs/21` §8 F1(a), ledger row 7 — reshaped by ledger row 9. The grid MIRRORS `apps.futuremagic.de`: the cards ARE the published folders, so an overlay entry whose folder is NOT published is DORMANT — no card, reported as `dormant overlay entries`. Title precedence is `manifesto.title` > overlay `title` > folder name. **NO old-host read**: the generator contacts only `APPS_HOST_BASE` and reads only `APPS_HOST_BASE` + `APPS_OVERLAY`. The browser cannot read the apps host (it sends no `Access-Control-Allow-Origin`), so the read happens in Node at build time and ships same-origin as `public/apps.index.json`. `npm run verify:index` is the offline fixture differential (7 pins). |
+| Gate | `scripts/gate.sh`, two tiers, memory watchdog | **`scripts/gate.sh`**, two tiers, no watchdog | Same exit-code vocabulary. The FULL tier runs the deploy's OWN command, `npm run build` = **generated app index + `tsc` + `vite build`** — so the gate covers the generator too. **It is OFFLINE again** (ledger row 10): the generator reads the LOCAL apps root (`APPS_ROOT_DIR`, default `$HOME/apps`) as a directory and makes NO HTTP request, so `APPS_HOST_BASE` is a URL prefix and nothing at all is fetched at build time. A host with no route to `apps.futuremagic.de` builds exactly as well as one with a route. The local compile+bundle is still ~250ms. The header of that script states what is deliberately NOT ported and why. |
+| Hub app list | (no equivalent) | **GENERATED at build time** by `scripts/generate-app-index.mjs` from the **LOCAL apps root** (`APPS_ROOT_DIR`, default `$HOME/apps`) — DISCOVERY, the ONLY source of existence — plus `seed/apps.overlay.json` (EDITORIAL decoration only: `title`/`updatedAt`), folding each app folder's `futuremagic.json` inline | `docs/21` §8 F1(a), ledger row 7 — reshaped by ledger rows 9 AND 10. The grid MIRRORS the apps root: the cards ARE the app folders, so an overlay entry whose folder is not an app is DORMANT — no card, reported as `dormant overlay entries`. Title precedence is `manifesto.title` > overlay `title` > folder name. **An app is a top-level DIRECTORY that CONTAINS `index.html`** (what the static host requires to serve it; symlinks are followed). A directory WITHOUT one is not an app and is reported as `ignored (no index.html)`, NOT warned about — the hub's own `assets/` and `shots/` live at that root. A missing/not-a-directory `APPS_ROOT_DIR` exits non-zero naming the path. **NO old-host read AND no HTTP at all**: the generator reads only `APPS_ROOT_DIR` + `APPS_OVERLAY`, and uses `APPS_HOST_BASE` only to build each card's public URL. The browser cannot read the apps host (it sends no `Access-Control-Allow-Origin`), so the read happens in Node at build time and ships same-origin as `public/apps.index.json`. `npm run verify:index` is the offline fixture differential (8 pins, no server). `scripts/publish-apps-root.sh` is what installs the hub at the root, never deleting anything. |
 | The ONE gate command | `scripts/gate.sh` | **`bash scripts/gate.sh`** | Exit 0 GREEN/verified · 1 RED · 2 compile-only/NOT verified · 3 plan-only · 9 lock held (refused, VOID). |
 | Package manager | pnpm | **npm** | `package-lock.json` is the committed lockfile; there is no `pnpm-lock.yaml`. `npm ci` reproduces the committed tree exactly and adds no file to the repo. (Host rule prefers the shared pnpm store *for pnpm projects*; introducing pnpm here would mean committing a second lockfile, which is the drift this table exists to prevent.) |
 | Worktrees | `<repo>/worktrees/<slice>` | **same** | In-repo, gitignored. Never `/tmp`. |
 | Session registry | `--home-administrator-projects-Campaigner--` | **`--home-administrator-projects-futuremagic--`** | Derived from the repo path by `scripts/board.sh`, never hardcoded. |
-| Deploy | push to `main` deploys to the live site | **manual, via `deploy-clean.ps1`; a push does NOT deploy** | See §3. |
+| Deploy | push to `main` deploys to the live site | **manual, via `deploy-clean.ps1` for the OLD host; `scripts/publish-apps-root.sh` installs the hub AT the apps root; a push does NOT deploy** | See §3. |
 | What "LANDED" means | the sha is on `origin/main`, pushed as part of landing | **committed locally AND verified by the dispatcher; PUSHING is a separate, owner-requested act** | `scripts/board.sh` therefore REPORTS an unpushed landing as `on origin/master: NO (local by design)` instead of flagging it stale. In Campaigner the flag is right because every landing pushes; here it would cry stale on every single one. |
 
 ---
@@ -102,7 +102,7 @@ BLOCKED"** (report-churn burns a writer's context for nothing).
 ## 3 · Deploy
 
 **Deployment is MANUAL and is NOT triggered by a git push** — verified 2026-09-21:
-this repo has no `.github/workflows`, and the deploy is a PowerShell script
+this repo has no `.github/workflows`, and the old-host deploy is a PowerShell script
 (`deploy-clean.ps1`) run by the owner. So `master` is safe to commit and push to
 without publishing anything; publishing is a separate, owner-run act.
 
@@ -110,3 +110,18 @@ The dispatcher's standing rule is therefore: **push only when the owner asks.** 
 local commit is the default landing. If this ever changes — a workflow, a hook, an
 FTP-on-push — this section is WRONG from that moment and the gate-then-push rule
 applies instead.
+
+**There are TWO deploy targets now, and they are independent.**
+
+| Target | How | What it serves |
+|---|---|---|
+| `https://futuremagic.de/` (the OLD site, FROZEN — ledger row 8) | `deploy-clean.ps1`, PowerShell over FTP, run by the owner on Windows. Cannot run on this host (no `pwsh`, queue row 13). | the old site, with its own protected app subfolders |
+| `https://apps.futuremagic.de/` (the hub AT the root — ledger row 10) | `bash scripts/publish-apps-root.sh`, runnable here. Target = `$1`, else `$APPS_ROOT_DIR`, else `$HOME/apps`. | THIS hub: `index.html` + `assets/` + the generated `apps.index.json` |
+
+`scripts/publish-apps-root.sh` runs `npm run build` FIRST and publishes nothing if the
+build fails, **NEVER deletes** (the app folders in that target belong to their own
+deploys — no `--delete`, no `rm`), refuses a target that does not exist or is not a
+directory, and then verifies by fetching the LOCAL origin `http://127.0.0.1:8082/`
+(bypassing the CDN, per the `apps-publish` skill) and asserting it returns the HUB
+rather than the directory listing it used to be. Exercise it against a TEMP target
+first — never against `$HOME/apps` as a rehearsal.

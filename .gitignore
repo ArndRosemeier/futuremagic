@@ -21,7 +21,8 @@ worktrees/
 .futuremagic-lock/
 
 # --- GENERATED app index: never hand-edit (scripts/generate-app-index.mjs) ---
-# A fresh clone has NEITHER file; `npm run build` creates both from the network.
+# A fresh clone has NEITHER file; `npm run build` creates both from the LOCAL apps root
+# (`APPS_ROOT_DIR`, default $HOME/apps) — NO network is needed any more (ledger row 10).
 # apps.index.json is what the browser fetches at runtime. apps.json is a byte-identical
 # legacy copy that exists ONLY because deploy-clean.ps1:148-150 throws unless
 # dist/apps.json exists while :210-215 refuses to upload it. One generator, no drift.

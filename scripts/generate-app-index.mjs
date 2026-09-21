@@ -5,29 +5,47 @@
 //   The apps host (apps.futuremagic.de) sends NO `Access-Control-Allow-Origin`, so the
 //   browser cannot read its folder listing or any app's `futuremagic.json`. Node has no
 //   such restriction, so the read moves to BUILD time: this script discovers the app
-//   folders from the apps host's auto-generated listing, folds each folder's manifesto
-//   inline, and writes an index the browser can read from its OWN origin. That is the
-//   only reason the fetch is here and not in `src/`.
+//   folders, folds each folder's manifesto inline, and writes an index the browser can
+//   read from its OWN origin. That is the only reason the read is here and not in `src/`.
 //
-// WHAT THE GRID IS (ledger row 9 — the owner's decision)
-//   The grid MIRRORS the apps host: the list of cards IS the list of published folders.
+// WHY THE READ IS *LOCAL* AND NOT HTTP (ledger row 10 — THE LANDMINE)
+//   The hub is being installed AT the apps root, so `https://apps.futuremagic.de/` will BE
+//   this hub. The static server serves a directory's `index.html` INSTEAD of its
+//   auto-generated listing once that file exists (measured with `python -m http.server`).
+//   The hub's own built `dist/index.html` carries 0 folder anchors, so HTTP discovery would
+//   find ZERO apps — and would NOT fail: the fetch returns HTTP 200, an empty index is
+//   written, and the gate goes GREEN while the live hub shows nothing. So discovery reads
+//   the apps root as a DIRECTORY on disk, where no `index.html` can shadow anything, and
+//   the build makes NO HTTP request at all. `APPS_HOST_BASE` survives only to build each
+//   card's public URL.
+//
+// WHAT THE GRID IS (ledger rows 9 + 10 — the owner's decision)
+//   The grid MIRRORS the apps root: the list of cards IS the list of app folders.
 //   Nothing about the list comes from the old site.
-//     * DISCOVERY is the only source of EXISTENCE: every DIRECTORY in the listing is a card.
+//     * DISCOVERY is the only source of EXISTENCE: a top-level DIRECTORY that CONTAINS
+//       `index.html` is an app — that is exactly what the static host requires in order to
+//       serve a folder as an app. Symlinks are followed (`~/apps/expert` is a symlink to a
+//       dist). A directory WITHOUT `index.html` is NOT an app and is reported in the
+//       summary as `ignored (no index.html): <names>` — NOT a warning, because the hub's own
+//       `assets/` and `shots/` directories sit at the apps root after this deploy. A
+//       top-level FILE (`README.md`) is ignored silently.
 //     * seed/apps.overlay.json is an EDITORIAL OVERLAY (title/date decoration only). It can
-//       NEVER add a card or move a link. An overlay entry whose folder is not published is
+//       NEVER add a card or move a link. An overlay entry whose folder is not an app is
 //       DORMANT: it produces no card and is only reported.
 //     * TITLE PRECEDENCE, explicitly: manifesto.title > overlay.title > folder name.
 //
 // NO RELATION TO THE OLD SITE
 //   The old host (`futuremagic.de`) is NEVER contacted. `path` is always DERIVED as
 //   `{APPS_HOST_BASE}{folder}/` — absolute, on the apps host — so no record can carry a
-//   root-relative path any more. The ONLY environment variables read are `APPS_HOST_BASE`
-//   and `APPS_OVERLAY`; in particular there is no `HUB_BASE` and no `APPS_INVENTORY`.
+//   root-relative path any more. The ONLY environment variables read are `APPS_ROOT_DIR`,
+//   `APPS_HOST_BASE` and `APPS_OVERLAY`; in particular there is no `HUB_BASE` and no
+//   `APPS_INVENTORY`.
 //
 // INPUTS
-//   <APPS_HOST_BASE>/                          the apps host listing — DISCOVERY.
-//   {APPS_HOST_BASE}{folder}/futuremagic.json  one per PUBLISHED folder — ENRICHMENT + title.
-//   seed/apps.overlay.json                     editorial decoration (title/updatedAt).
+//   {APPS_ROOT_DIR}/                   the apps root the static host serves — DISCOVERY.
+//   {APPS_ROOT_DIR}/{folder}/index.html the mark of an app — a directory without it is not one.
+//   {APPS_ROOT_DIR}/{folder}/futuremagic.json  one per app folder — ENRICHMENT + title.
+//   seed/apps.overlay.json             editorial decoration (title/updatedAt).
 //
 // OUTPUTS (both byte-identical, from this one generator so they cannot drift)
 //   public/apps.index.json   what `src/registry.ts` fetches at runtime (new name, so
@@ -38,16 +56,19 @@
 //                            public/apps.json is dropped.
 //
 // FAILURE CONTRACT
-//   All fetching and validation happens BEFORE anything is written. A fatal error
-//   (transport failure to the apps host, malformed overlay) exits non-zero and leaves the
-//   previously generated files BYTE-IDENTICAL. Absence is never invented: a 404
-//   manifesto is a warning with the card KEPT, and a missing `updatedAt` stays missing.
+//   All reading and validation happens BEFORE anything is written. A fatal error (a
+//   nonexistent/not-a-directory APPS_ROOT_DIR, a malformed overlay) exits non-zero and
+//   leaves the previously generated files BYTE-IDENTICAL. Absence is never invented: a
+//   missing manifesto is a warning with the card KEPT, and a missing `updatedAt` stays
+//   missing.
 //
 // ENV OVERRIDES (also the offline fixture seam — see scripts/verify-app-index.mjs)
-//   APPS_HOST_BASE   default https://apps.futuremagic.de/   the listing host
+//   APPS_ROOT_DIR    default $HOME/apps                 the directory to DISCOVER in
+//   APPS_HOST_BASE   default https://apps.futuremagic.de/  URL PREFIX ONLY — never fetched
 //   APPS_OVERLAY     default <repo>/seed/apps.overlay.json
 
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,9 +76,13 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const OUT_INDEX = join(REPO, 'public/apps.index.json');
 const OUT_LEGACY = join(REPO, 'public/apps.json');
-const FETCH_TIMEOUT_MS = 30_000;
 
-// Keys the overlay must NEVER carry: it decorates a published folder, it does not define
+// The mark of an app: the static host serves a folder as an app only when it can serve
+// this file, so "has index.html" IS the definition, not a heuristic.
+const APP_MARKER = 'index.html';
+const MANIFESTO = 'futuremagic.json';
+
+// Keys the overlay must NEVER carry: it decorates an app folder, it does not define
 // one. A leftover key from the old `seed/apps.inventory.json` shape is FATAL by name.
 const OVERLAY_FORBIDDEN_KEYS = ['path', 'manifesto', 'external', 'url'];
 
@@ -65,9 +90,11 @@ function withTrailingSlash(value) {
   return value.endsWith('/') ? value : `${value}/`;
 }
 
-// The ONLY two environment variables this generator reads. There is deliberately no
+// The ONLY three environment variables this generator reads. There is deliberately no
 // `HUB_BASE` and no `APPS_INVENTORY`: the old host is not contacted, and the overlay is
 // not an inventory (it cannot create a card).
+const APPS_ROOT_DIR = resolve(process.env.APPS_ROOT_DIR ?? join(homedir(), 'apps'));
+// A URL PREFIX, nothing more. No request is ever made to it: the build is fully offline.
 const APPS_HOST_BASE = withTrailingSlash(
   process.env.APPS_HOST_BASE ?? 'https://apps.futuremagic.de/',
 );
@@ -79,63 +106,83 @@ function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function hostOf(url) {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
-
 // A non-empty string, or `undefined`. Used for the title precedence chain so an empty
 // string can never blank a card title.
 function nonEmptyString(value) {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-async function fetchWithTimeout(url) {
-  return fetch(url, {
-    redirect: 'follow',
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
+function reasonOf(cause) {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
-// A transport failure — DNS, refused connection, timeout — names the HOST and is FATAL.
-// A 404 (or any HTTP status) is a response, not a transport failure: the caller decides.
-async function fetchHost(url, what) {
+// `stat` FOLLOWS symlinks: `~/apps/expert` is a symlink to a dist directory and IS an app.
+// A broken symlink, a plain file and a fifo all fall through to `false` and are ignored.
+async function isDirectory(path) {
   try {
-    return await fetchWithTimeout(url);
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function exists(path) {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// (a) DISCOVERY — the apps root AS A DIRECTORY is the ONLY source of existence.
+//
+// A top-level DIRECTORY CONTAINING `index.html` is an app. A directory without one is not,
+// and is returned so the summary can NAME it (never a warning: the hub's own `assets/` and
+// `shots/` live here). A top-level FILE is ignored silently. A nonexistent or
+// not-a-directory root is FATAL and names the path — never a silent empty grid.
+async function discoverApps(root) {
+  // `stat`, not `lstat`: the root itself may be a symlink (the dispatcher tests against a
+  // temp dir), and following it is the point.
+  let rootStat;
+  try {
+    rootStat = await stat(root);
   } catch (cause) {
-    const reason = cause instanceof Error ? cause.message : String(cause);
     throw new Error(
-      `transport failure reaching host "${hostOf(url)}" while fetching ${what} (${url}): ${reason}`,
+      `apps root "${root}" (APPS_ROOT_DIR) does not exist: ${reasonOf(cause)} — it must be ` +
+        'the directory the static host serves; refusing to write an empty grid',
     );
   }
-}
-
-function parseListing(html) {
-  // Python's http.server emits `<li><a href="expert/">expert@</a></li>`. The `@` is a
-  // SYMLINK marker in the DISPLAY TEXT only — it does not disqualify the directory.
-  // A trailing `/` is the ONLY directory signal; a plain name is a FILE and is ignored.
-  const folders = [];
-  const anchor = /<a\s[^>]*href\s*=\s*["']([^"']*)["']/gi;
-  let match;
-  while ((match = anchor.exec(html)) !== null) {
-    const href = match[1];
-    if (typeof href !== 'string' || !href.endsWith('/')) continue; // file -> ignored
-    if (/^[a-z][a-z0-9+.-]*:/i.test(href)) continue; // absolute URL, not a folder name
-    if (href.startsWith('/') || href.startsWith('?') || href.startsWith('#')) continue;
-    const name = decodeURIComponent(href.replace(/\/+$/, ''));
-    if (name === '' || name === '.' || name === '..' || name.includes('/')) continue;
-    folders.push(name);
+  if (!rootStat.isDirectory()) {
+    throw new Error(
+      `apps root "${root}" (APPS_ROOT_DIR) is NOT a directory (it is not something a static ` +
+        'host can serve folders from); refusing to write an empty grid',
+    );
   }
-  return folders;
+  const entries = await readdir(root, { withFileTypes: true });
+
+  const folders = [];
+  const ignored = [];
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    // Directories first; a symlink (Dirent.isSymbolicLink) is resolved by stat below.
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue; // a top-level FILE -> silent
+    if (!(await isDirectory(path))) continue; // broken symlink -> not an app, not worth naming
+    if (await exists(join(path, APP_MARKER))) {
+      folders.push(entry.name);
+    } else {
+      ignored.push(entry.name);
+    }
+  }
+  folders.sort();
+  ignored.sort();
+  return { folders, ignored };
 }
 
 function parseManifesto(data) {
   // Validated as `parseManifesto` in src/registry.ts was, EXCEPT for `title`: the grid's
-  // title precedence is manifesto.title > overlay.title > folder name, so a published
-  // folder's OWN manifesto title now wins — the app speaking about itself.
+  // title precedence is manifesto.title > overlay.title > folder name, so an app folder's
+  // OWN manifesto title now wins — the app speaking about itself.
   if (!isRecord(data)) return null;
   const manifesto = {};
   if (nonEmptyString(data.title) !== undefined) manifesto.title = data.title;
@@ -152,8 +199,7 @@ function readOverlay(raw) {
   try {
     data = JSON.parse(raw);
   } catch (cause) {
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    throw new Error(`overlay is not valid JSON (${OVERLAY_PATH}): ${reason}`);
+    throw new Error(`overlay is not valid JSON (${OVERLAY_PATH}): ${reasonOf(cause)}`);
   }
   if (!isRecord(data) || !Array.isArray(data.apps)) {
     throw new Error(`overlay must be { version, apps[] } (${OVERLAY_PATH})`);
@@ -166,7 +212,7 @@ function readOverlay(raw) {
     for (const key of OVERLAY_FORBIDDEN_KEYS) {
       if (key in value) {
         throw new Error(
-          `overlay app #${i} carries "${key}" — the overlay only DECORATES a published ` +
+          `overlay app #${i} carries "${key}" — the overlay only DECORATES an app ` +
             'folder (title/updatedAt); it cannot add a card, a path or a link',
         );
       }
@@ -193,73 +239,69 @@ function readOverlay(raw) {
   return { version, apps };
 }
 
-async function main() {
-  const overlay = readOverlay(await readFile(OVERLAY_PATH, 'utf8'));
-
-  // (a) DISCOVERY — the apps host's folder listing is the ONLY source of existence.
-  // Fatal if the host is unreachable; nothing is written.
-  const listingResponse = await fetchHost(APPS_HOST_BASE, 'the apps host folder listing');
-  if (!listingResponse.ok) {
-    throw new Error(
-      `apps host listing returned HTTP ${listingResponse.status} (${APPS_HOST_BASE})`,
-    );
-  }
-  const hostFolders = parseListing(await listingResponse.text());
-
-  const overlayBySlug = new Map();
-  for (const entry of overlay.apps) overlayBySlug.set(entry.slug.toLowerCase(), entry);
-
-  // (b) ENRICHMENT — one manifesto fetch per PUBLISHED folder, with or without an overlay
-  // entry. A folder IS an app, so its own `futuremagic.json` is read: this is the fix for
-  // the "a newly published folder is never enriched" gap (board row 19).
-  const enrichment = new Map(); // folder (as listed) -> manifesto
-  let enrichmentFound = 0;
-  let enrichmentMissing = 0;
-  const enrichmentWarnings = [];
-  for (const folder of hostFolders) {
-    const url = `${APPS_HOST_BASE}${folder}/futuremagic.json`;
-    const response = await fetchHost(url, `the manifesto for "${folder}"`);
-    if (!response.ok) {
-      // A 404 / absent manifesto is NORMAL and not fatal: a published app may not ship one
-      // yet (measured 2026-09-21: newly published `fracvibe` has none). Warn, KEEP the card.
-      enrichmentMissing += 1;
-      enrichmentWarnings.push(folder);
+// (b) ENRICHMENT — one LOCAL manifesto read per app folder, with or without an overlay
+// entry. Absent and non-JSON are both a WARNING with the card KEPT: an app may not ship a
+// manifesto yet. Nothing here touches the network.
+async function enrich(folders) {
+  const enrichment = new Map(); // folder -> manifesto
+  let found = 0;
+  let missing = 0;
+  const warnings = [];
+  for (const folder of folders) {
+    const path = join(APPS_ROOT_DIR, folder, MANIFESTO);
+    let raw;
+    try {
+      raw = await readFile(path, 'utf8');
+    } catch (cause) {
+      missing += 1;
+      warnings.push(folder);
       console.warn(
-        `WARNING: manifesto missing for "${folder}" (HTTP ${response.status}) — ` +
-          `card kept WITHOUT enrichment: ${url}`,
+        `WARNING: manifesto absent for "${folder}" (${reasonOf(cause)}) — ` +
+          `card kept WITHOUT enrichment: ${path}`,
       );
       continue;
     }
     let data;
     try {
-      data = await response.json();
+      data = JSON.parse(raw);
     } catch {
-      enrichmentMissing += 1;
-      enrichmentWarnings.push(folder);
+      missing += 1;
+      warnings.push(folder);
       console.warn(
         `WARNING: manifesto for "${folder}" is not valid JSON — ` +
-          `card kept WITHOUT enrichment: ${url}`,
+          `card kept WITHOUT enrichment: ${path}`,
       );
       continue;
     }
     const manifesto = parseManifesto(data);
     if (manifesto === null) {
-      enrichmentMissing += 1;
-      enrichmentWarnings.push(folder);
+      missing += 1;
+      warnings.push(folder);
       console.warn(
         `WARNING: manifesto for "${folder}" is not an object — ` +
-          `card kept WITHOUT enrichment: ${url}`,
+          `card kept WITHOUT enrichment: ${path}`,
       );
       continue;
     }
-    enrichmentFound += 1;
+    found += 1;
     enrichment.set(folder, manifesto);
   }
+  return { enrichment, found, missing, warnings };
+}
+
+async function main() {
+  const overlay = readOverlay(await readFile(OVERLAY_PATH, 'utf8'));
+
+  const { folders, ignored } = await discoverApps(APPS_ROOT_DIR);
+  const { enrichment, found, missing, warnings } = await enrich(folders);
 
   // (c) BUILD the whole index IN MEMORY. Nothing is written until every step has succeeded.
+  const overlayBySlug = new Map();
+  for (const entry of overlay.apps) overlayBySlug.set(entry.slug.toLowerCase(), entry);
+
   const cards = [];
   const matchedOverlaySlugs = new Set();
-  for (const folder of hostFolders) {
+  for (const folder of folders) {
     const overlayEntry = overlayBySlug.get(folder.toLowerCase());
     if (overlayEntry !== undefined) matchedOverlaySlugs.add(overlayEntry.slug.toLowerCase());
     const manifesto = enrichment.get(folder) ?? {};
@@ -281,9 +323,9 @@ async function main() {
     cards.push(card);
   }
 
-  // (d) A DORMANT overlay entry — its folder is NOT published — produces NO card. It is
+  // (d) A DORMANT overlay entry — its folder is NOT an app — produces NO card. It is
   // KEPT and REPORTED: that is how `GM Cockpit` and friends come back the day those apps
-  // are republished. The grid mirrors the host, so the overlay may only decorate.
+  // are republished. The grid mirrors the apps root, so the overlay may only decorate.
   const dormant = overlay.apps.filter(
     (entry) => !matchedOverlaySlugs.has(entry.slug.toLowerCase()),
   );
@@ -309,17 +351,21 @@ async function main() {
   // (f) SUMMARY.
   console.log('--- generated app index ---');
   console.log(`overlay:         ${OVERLAY_PATH}`);
-  console.log(`apps host:       ${APPS_HOST_BASE}`);
+  console.log(`apps root:       ${APPS_ROOT_DIR}`);
+  console.log(`apps host base:  ${APPS_HOST_BASE} (URL prefix only — NEVER fetched)`);
   console.log(`apps written:    ${cards.length}`);
   console.log(
-    `enrichment:      found ${enrichmentFound}, missing ${enrichmentMissing}` +
-      (enrichmentWarnings.length > 0 ? ` [${enrichmentWarnings.join(', ')}]` : ''),
+    `enrichment:      found ${found}, missing ${missing}` +
+      (warnings.length > 0 ? ` [${warnings.join(', ')}]` : ''),
+  );
+  console.log(
+    `ignored (no ${APP_MARKER}): ${ignored.length > 0 ? ignored.join(', ') : '(none)'}`,
   );
   console.log(
     `dormant overlay entries: ${dormant.length}` +
       (dormant.length > 0 ? ` [${dormant.map((entry) => entry.slug).join(', ')}]` : ''),
   );
-  console.log(`host folders:    ${hostFolders.length > 0 ? hostFolders.join(', ') : '(none)'}`);
+  console.log(`app folders:     ${folders.length > 0 ? folders.join(', ') : '(none)'}`);
   console.log(`wrote:           ${OUT_INDEX}`);
   console.log(`wrote:           ${OUT_LEGACY} (byte-identical legacy copy)`);
 }

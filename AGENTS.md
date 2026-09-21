@@ -41,12 +41,15 @@ hand-rolls `tsc` or `vite build`: the script owns the lock, the log and the verd
   actors can look in the same instant, both see "free", and both start. *(inherited)*
 - **A killed or refused run is VOID**, never evidence. Re-run it under the lock.
 - **The gate is cheap here** — the local `tsc` + `vite build` is ≈250ms; the FULL tier
-  additionally runs the index generator, which FETCHES the apps host (and no other host),
-  so it needs the network. A foreground run is acceptable, but prefer a background job
-  with its log kept, and **never run a long check in the foreground in the session the
-  owner is talking to.** *(measured here: the owner will interrupt.)* The generator writes
-  nothing until every fetch has succeeded, so an unreachable host is a RED gate, never a
-  stale-index green (ledger row 7).
+  additionally runs the index generator, which reads the LOCAL apps root
+  (`APPS_ROOT_DIR`, default `$HOME/apps`) as a DIRECTORY and makes **NO network request at
+  all** (ledger row 10), so the FULL tier needs no network either. A foreground run is
+  acceptable, but prefer a background job with its log kept, and **never run a long check
+  in the foreground in the session the owner is talking to.** *(measured here: the owner
+  will interrupt.)* The generator writes nothing until every read has succeeded, so a
+  missing apps root is a RED gate naming the path, never a silent empty grid. *(was: the
+  FULL tier needed the network — the generator used to FETCH the apps host. Ledger row 10
+  removed that: `APPS_HOST_BASE` is a URL prefix now, never fetched.)*
 - **A subagent runs its checks IN-TURN.** A subagent's background jobs die when its
   turn ends — measured on this box: a probe's background `sleep 240` was gone ~20s
   after the turn ended. "Start it in the background and wait for the notice" works
@@ -131,13 +134,37 @@ Two consequences that bite:
   and still EMPTY, so its half of the hazard remains open — see
   `docs/18-ARCHITECTURE.md` §4 hazard 1 and board queue row 18.
 - **The hub lists ONLY what is published under `~/apps`.** The generated grid MIRRORS
-  `apps.futuremagic.de` (ledger row 9): the cards ARE the published folders, and
+  the apps root (ledger row 9): the cards ARE the app folders, and
   `seed/apps.overlay.json` may only DECORATE them with a title and a date — it can never
-  add a card, and an entry whose folder is not published is DORMANT (no card, reported).
+  add a card, and an entry whose folder is not an app is DORMANT (no card, reported).
   The old copies stay serviceable but UNLISTED, and the old-site registry,
   `scripts/Register-FuturemagicApp.ps1`, `$ProtectedDirs` and `seed/manifestos/` are
   PARK-UNTIL-FORWARD — do not churn them, and do not edit the Windows deploy script for
   the apps half.
+- **The hub lives AT the apps root (ledger row 10).** `https://apps.futuremagic.de/` IS
+  this hub, so the hub's own `dist/` files (`index.html`, `assets/`, `apps.index.json`,
+  `shots/`, `favicon.svg`) sit in the SAME directory as the app folders. Three things
+  follow, and none of them is optional:
+  - **Discovery reads the LOCAL apps root, never the host.** `scripts/generate-app-index.mjs`
+    reads `APPS_ROOT_DIR` (default `$HOME/apps`) as a DIRECTORY, because the host serves a
+    directory's `index.html` INSTEAD of its auto-generated listing once that file exists —
+    so HTTP discovery would find ZERO apps, write an empty index and still go GREEN (board
+    TRAP `hub-at-the-root-blinds-discovery`). The build makes NO HTTP request at all:
+    `APPS_HOST_BASE` only PREFIXES each card's public URL.
+  - **An app is a top-level DIRECTORY that CONTAINS `index.html`** — exactly what the
+    static host requires in order to serve it (symlinks followed: `~/apps/expert` is a
+    symlink to a dist). A directory WITHOUT one is not an app and is reported as
+    `ignored (no index.html)`, which is a SUMMARY line and NOT a warning — the hub's own
+    `assets/` and `shots/` live there and must not warn on every build. A top-level FILE
+    is ignored silently. A missing/not-a-directory `APPS_ROOT_DIR` is a RED gate naming
+    the path.
+  - **Publishing the hub there is `scripts/publish-apps-root.sh`, and it NEVER DELETES.**
+    No `rsync --delete`, no `rm`: the app folders in that target belong to their own
+    deploys, exactly like the old host's protected subfolders below. It runs
+    `npm run build` FIRST (publishing nothing if that fails), refuses a target that does
+    not exist or is not a directory, and verifies against the LOCAL origin
+    (`http://127.0.0.1:8082/`) that the root serves the HUB rather than a directory
+    listing. Rehearse it against a TEMP target; the ONE real install is the dispatcher's act.
 
 ## 7 · The record, and where a successor starts
 
