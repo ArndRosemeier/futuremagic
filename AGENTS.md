@@ -41,10 +41,10 @@ hand-rolls `tsc` or `vite build`: the script owns the lock, the log and the verd
   actors can look in the same instant, both see "free", and both start. *(inherited)*
 - **A killed or refused run is VOID**, never evidence. Re-run it under the lock.
 - **The gate is cheap here** — the local `tsc` + `vite build` is ≈250ms; the FULL tier
-  additionally runs the index generator, which FETCHES two hosts, so it needs the
-  network. A foreground run is acceptable, but prefer a background job with its log
-  kept, and **never run a long check in the foreground in the session the owner is
-  talking to.** *(measured here: the owner will interrupt.)* The generator writes
+  additionally runs the index generator, which FETCHES the apps host (and no other host),
+  so it needs the network. A foreground run is acceptable, but prefer a background job
+  with its log kept, and **never run a long check in the foreground in the session the
+  owner is talking to.** *(measured here: the owner will interrupt.)* The generator writes
   nothing until every fetch has succeeded, so an unreachable host is a RED gate, never a
   stale-index green (ledger row 7).
 - **A subagent runs its checks IN-TURN.** A subagent's background jobs die when its
@@ -130,6 +130,14 @@ Two consequences that bite:
   `:148-150` requires `dist/apps.json` to EXIST. `public/stories.json` is still tracked
   and still EMPTY, so its half of the hazard remains open — see
   `docs/18-ARCHITECTURE.md` §4 hazard 1 and board queue row 18.
+- **The hub lists ONLY what is published under `~/apps`.** The generated grid MIRRORS
+  `apps.futuremagic.de` (ledger row 9): the cards ARE the published folders, and
+  `seed/apps.overlay.json` may only DECORATE them with a title and a date — it can never
+  add a card, and an entry whose folder is not published is DORMANT (no card, reported).
+  The old copies stay serviceable but UNLISTED, and the old-site registry,
+  `scripts/Register-FuturemagicApp.ps1`, `$ProtectedDirs` and `seed/manifestos/` are
+  PARK-UNTIL-FORWARD — do not churn them, and do not edit the Windows deploy script for
+  the apps half.
 
 ## 7 · The record, and where a successor starts
 

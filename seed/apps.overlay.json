@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "slug": "Expert",
+      "title": "Expert",
+      "updatedAt": "2026-09-17T07:18:27.9448284Z"
+    },
+    {
+      "slug": "LlmTable",
+      "title": "LlmTable",
+      "updatedAt": "2026-07-24T13:48:33.4651486Z"
+    },
+    {
+      "slug": "ColossusWeb",
+      "title": "ColossusWeb",
+      "updatedAt": "2026-09-06T16:25:35.6668377Z"
+    },
+    {
+      "slug": "ArmchairGeneral",
+      "title": "Armchair General",
+      "updatedAt": "2026-07-21T19:19:45.3041272Z"
+    },
+    {
+      "slug": "Conquest",
+      "title": "Conquest",
+      "updatedAt": "2026-07-21T19:19:46.7871236Z"
+    },
+    {
+      "slug": "Eco",
+      "title": "Ecosystem Simulator",
+      "updatedAt": "2026-07-21T19:19:47.6040590Z"
+    },
+    {
+      "slug": "EccentriCity",
+      "title": "Eccentri City",
+      "updatedAt": "2026-08-07T18:37:27.3558797Z"
+    },
+    {
+      "slug": "GM_Helper",
+      "title": "GM Cockpit",
+      "updatedAt": "2026-08-29T23:05:58.9443933Z"
+    },
+    {
+      "slug": "Campaigner",
+      "title": "Campaigner",
+      "updatedAt": "2026-09-02T21:32:33.6057207Z"
+    },
+    {
+      "slug": "BlasterMaster",
+      "title": "Blaster Master",
+      "updatedAt": "2026-09-13T17:17:27.5967037Z"
+    },
+    {
+      "slug": "Civ",
+      "title": "CivTS",
+      "updatedAt": "2026-09-14T19:00:56.1564428Z"
+    },
+    {
+      "slug": "Orion",
+      "title": "Orion",
+      "updatedAt": "2026-09-18T19:47:51.9938340Z"
+    },
+    {
+      "slug": "fracvibe",
+      "title": "FracVibe"
+    }
+  ]
+}

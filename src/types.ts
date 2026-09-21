@@ -8,14 +8,6 @@ export type RegistryApp = {
    * `scripts/generate-app-index.mjs`.
    */
   updatedAt?: string;
-  external?: boolean;
-  url?: string;
-  /**
-   * The INPUT flag `scripts/generate-app-index.mjs` reads to decide whether to fetch
-   * `{path}futuremagic.json` at build time. The runtime no longer fetches manifestos:
-   * the enrichment below is already inlined in the index.
-   */
-  manifesto?: boolean;
   /** Inlined from the app's `futuremagic.json` by the generator. */
   tagline?: string;
   tags?: string[];
@@ -27,6 +19,12 @@ export type AppsRegistry = {
   apps: RegistryApp[];
 };
 
+/**
+ * The app-side `futuremagic.json` shape, as read at BUILD time by
+ * `scripts/generate-app-index.mjs` (the runtime never fetches it). All fields optional.
+ * `title` participates in the generator's precedence: manifesto.title > overlay.title >
+ * folder name.
+ */
 export type AppManifesto = {
   title?: string;
   tagline?: string;

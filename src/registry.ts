@@ -23,15 +23,6 @@ function parseRegistryApp(value: unknown): RegistryApp | null {
   if (typeof value.updatedAt === 'string') {
     app.updatedAt = value.updatedAt;
   }
-  if (typeof value.external === 'boolean') {
-    app.external = value.external;
-  }
-  if (typeof value.url === 'string') {
-    app.url = value.url;
-  }
-  if (typeof value.manifesto === 'boolean') {
-    app.manifesto = value.manifesto;
-  }
   // Enrichment is INLINE in the generated index (the generator read each manifesto at
   // build time); the runtime no longer fetches `{path}futuremagic.json`.
   if (typeof value.tagline === 'string') {
@@ -60,10 +51,9 @@ function parseRegistry(data: unknown): AppsRegistry {
   return { version, apps };
 }
 
+// `path` is used verbatim as the card's href; the generator now always writes it as an
+// absolute URL on the apps host. The only normalisation kept is the trailing slash.
 function resolveHref(app: RegistryApp): string {
-  if (app.external === true && typeof app.url === 'string') {
-    return app.url;
-  }
   return app.path.endsWith('/') ? app.path : `${app.path}/`;
 }
 

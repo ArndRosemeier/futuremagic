@@ -1,5 +1,7 @@
 # 21 — Migrating the hub's app target to `apps.futuremagic.de` (examination)
 
+> **SUPERSEDED BY ledger row 9** — the grid now MIRRORS `apps.futuremagic.de` (only what is published under `~/apps`), the old-site inventory became a decoration-only overlay, and the old host is never read; the findings below stand as history, not as the built state.
+
 Owner's words, verbatim: *"In the long run i want to migrate my apps to apps.futuremagic.de.
 This project should switch the target to that URL which resides on a server i directly
 control. For now there is not much on that site, but this app should be flexible about
