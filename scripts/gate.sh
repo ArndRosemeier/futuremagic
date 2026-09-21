@@ -9,12 +9,14 @@
 # WHAT THIS PROJECT'S GATE ACTUALLY IS, AND WHY IT IS NOT CAMPAIGNER'S
 #   futuremagic has NO test suite and NO linter (44 tracked files, two devDeps:
 #   typescript + vite). So the gate cannot be a suite: it is exactly the thing the
-#   deploy runs, which is `package.json`'s build script = `tsc && vite build`.
+#   deploy runs, which is `package.json`'s build script =
+#   `node scripts/generate-app-index.mjs && tsc && vite build`. The FULL tier runs that
+#   ONE command so a green gate means the deploy's own sequence ran.
 #   Two tiers, because they answer two different questions:
 #
-#     0 = FULL gate GREEN       typecheck + vite build both passed → VERIFIED.
+#     0 = FULL gate GREEN       `npm run build` passed → VERIFIED.
 #     1 = RED                   a check failed. The raw log names it.
-#     2 = COMPILE tier only     typecheck passed, `vite build` did NOT run →
+#     2 = COMPILE tier only     typecheck passed, `npm run build` did NOT run →
 #                               NOT VERIFIED. Never report this as "the gate passed".
 #     3 = plan only             nothing ran (GATE_PLAN_ONLY=1). Not a result at all.
 #     9 = lock held             another gate owns the lock → REFUSED and VOID.
@@ -22,6 +24,13 @@
 #
 #   The compile tier is fast and deliberately CANNOT be quoted as a pass: a build
 #   touching index.html, public/ or vite.config.ts can typecheck and still not build.
+#
+#   THE FULL TIER NOW NEEDS THE NETWORK, AND THAT IS THE HONEST TRADE, NOT A WEAKENING:
+#   the deploy's first step fetches the apps-host folder listing, so a build that cannot
+#   reach the host CANNOT produce the index the deploy would ship. The generator writes
+#   nothing until every fetch has succeeded, so an unreachable host fails the gate RED
+#   with the previously generated index left byte-identical — it cannot go falsely green.
+
 #
 # WHAT IS DELIBERATELY *NOT* PORTED, AND WHY (do not "fix" these by copying
 # Campaigner — they are load-bearing there and dead weight here)
@@ -48,7 +57,7 @@
 #   and it destroys the failing evidence. Read the log file.
 #
 # Usage:
-#   scripts/gate.sh                      # FULL gate: tsc + vite build      (exit 0)
+#   scripts/gate.sh                      # FULL gate: npm run build          (exit 0)
 #   GATE_TIER=compile scripts/gate.sh    # typecheck only                   (exit 2)
 #   GATE_PLAN_ONLY=1 scripts/gate.sh     # print what would run, run nothing (exit 3)
 #
@@ -102,7 +111,7 @@ if [ "${GATE_PLAN_ONLY:-0}" = "1" ]; then
   echo "lock          = $LOCK"
   echo "log           = $LOG"
   echo "package mgr   = npm (package-lock.json is the committed lockfile)"
-  echo "full tier     = npm run build   (= tsc && vite build)"
+  echo "full tier     = npm run build   (= node scripts/generate-app-index.mjs && tsc && vite build)"
   echo "compile tier  = npx tsc --noEmit"
   echo "exit 0 = GREEN(verified) · 1 = RED · 2 = compile-only(not verified) · 3 = plan · 9 = lock held"
   exit 3
@@ -175,36 +184,37 @@ run_gate() {
     return 1
   fi
 
-  echo "--- typecheck: npx tsc --noEmit ---"
-  npx tsc --noEmit
-  TC=$?
-  echo "typecheck exit=$TC"
-  if [ "$TC" -ne 0 ]; then
-    echo
-    echo "GATE RED: typecheck failed. EXIT=1"
-    return 1
-  fi
-
   if [ "$TIER" = "compile" ]; then
+    echo "--- typecheck: npx tsc --noEmit ---"
+    npx tsc --noEmit
+    TC=$?
+    echo "typecheck exit=$TC"
+    if [ "$TC" -ne 0 ]; then
+      echo
+      echo "GATE RED: typecheck failed. EXIT=1"
+      return 1
+    fi
     echo
-    echo "COMPILE TIER ONLY — 'vite build' did NOT run. This is NOT a verified result."
+    echo "COMPILE TIER ONLY — 'npm run build' did NOT run. This is NOT a verified result."
     echo "EXIT=2"
     return 2
   fi
 
-  echo
-  echo "--- build: npx vite build ---"
-  npx vite build
+  # FULL tier == EXACTLY the command the deploy runs. Running a DIFFERENT sequence here
+  # would let the gate go green while the deploy's own first step (the index generator)
+  # fails.
+  echo "--- full: npm run build (generated app index + tsc + vite build) ---"
+  npm run build
   BC=$?
   echo "build exit=$BC"
   if [ "$BC" -ne 0 ]; then
     echo
-    echo "GATE RED: vite build failed. EXIT=1"
+    echo "GATE RED: 'npm run build' failed. EXIT=1"
     return 1
   fi
 
   echo
-  echo "GATE GREEN: typecheck + vite build both passed on $(git rev-parse --short HEAD). EXIT=0"
+  echo "GATE GREEN: 'npm run build' (generated app index + typecheck + vite build) passed on $(git rev-parse --short HEAD). EXIT=0"
   return 0
 }
 

@@ -1,9 +1,4 @@
-import type {
-  AppManifesto,
-  AppsRegistry,
-  RegistryApp,
-  ResolvedApp,
-} from './types';
+import type { AppsRegistry, RegistryApp, ResolvedApp } from './types';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -14,16 +9,20 @@ function parseRegistryApp(value: unknown): RegistryApp | null {
   const slug = value.slug;
   const title = value.title;
   const path = value.path;
-  const updatedAt = value.updatedAt;
   if (
     typeof slug !== 'string' ||
     typeof title !== 'string' ||
-    typeof path !== 'string' ||
-    typeof updatedAt !== 'string'
+    typeof path !== 'string'
   ) {
     return null;
   }
-  const app: RegistryApp = { slug, title, path, updatedAt };
+  const app: RegistryApp = { slug, title, path };
+  // `updatedAt` is OPTIONAL. A record without it is KEPT — that is the whole point of
+  // the generated index: a folder discovered on the apps host has no date, and absence
+  // is honest where a synthesized date would be indistinguishable from a real one.
+  if (typeof value.updatedAt === 'string') {
+    app.updatedAt = value.updatedAt;
+  }
   if (typeof value.external === 'boolean') {
     app.external = value.external;
   }
@@ -33,51 +32,32 @@ function parseRegistryApp(value: unknown): RegistryApp | null {
   if (typeof value.manifesto === 'boolean') {
     app.manifesto = value.manifesto;
   }
+  // Enrichment is INLINE in the generated index (the generator read each manifesto at
+  // build time); the runtime no longer fetches `{path}futuremagic.json`.
+  if (typeof value.tagline === 'string') {
+    app.tagline = value.tagline;
+  }
+  if (
+    Array.isArray(value.tags) &&
+    value.tags.every((t): t is string => typeof t === 'string')
+  ) {
+    app.tags = value.tags;
+  }
+  if (typeof value.screenshot === 'string') {
+    app.screenshot = value.screenshot;
+  }
   return app;
 }
 
 function parseRegistry(data: unknown): AppsRegistry {
   if (!isRecord(data) || !Array.isArray(data.apps)) {
-    throw new Error('Invalid apps.json: expected { version, apps }');
+    throw new Error('Invalid apps.index.json: expected { version, apps }');
   }
   const apps = data.apps
     .map(parseRegistryApp)
     .filter((app): app is RegistryApp => app !== null);
   const version = typeof data.version === 'number' ? data.version : 1;
   return { version, apps };
-}
-
-function parseManifesto(data: unknown): AppManifesto | null {
-  if (!isRecord(data)) return null;
-  const manifesto: AppManifesto = {};
-  if (typeof data.title === 'string') manifesto.title = data.title;
-  if (typeof data.tagline === 'string') manifesto.tagline = data.tagline;
-  if (
-    Array.isArray(data.tags) &&
-    data.tags.every((t): t is string => typeof t === 'string')
-  ) {
-    manifesto.tags = data.tags;
-  }
-  if (typeof data.screenshot === 'string') manifesto.screenshot = data.screenshot;
-  return manifesto;
-}
-
-async function fetchManifesto(path: string): Promise<AppManifesto | null> {
-  const base = path.endsWith('/') ? path : `${path}/`;
-  const url = `${base}futuremagic.json`;
-  try {
-    const response = await fetch(url, {
-      cache: 'no-cache',
-    });
-    if (!response.ok) {
-      console.warn(`Manifesto missing: ${url} (${response.status})`);
-      return null;
-    }
-    return parseManifesto(await response.json());
-  } catch {
-    console.warn(`Manifesto failed to load: ${url}`);
-    return null;
-  }
 }
 
 function resolveHref(app: RegistryApp): string {
@@ -101,39 +81,36 @@ function resolveScreenshotUrl(
 }
 
 export async function loadResolvedApps(): Promise<ResolvedApp[]> {
-  const response = await fetch('/apps.json', { cache: 'no-cache' });
+  // The generator writes `public/apps.index.json` (a name `deploy-clean.ps1` does not
+  // protect, so it actually ships). The legacy `/apps.json` is a server-managed file the
+  // deploy skips — see AGENTS.md §6 and docs/21 §8.
+  const response = await fetch('/apps.index.json', { cache: 'no-cache' });
   if (!response.ok) {
-    throw new Error(`Failed to load apps.json (${response.status})`);
+    throw new Error(`Failed to load apps.index.json (${response.status})`);
   }
   const registry = parseRegistry(await response.json());
 
-  const resolved = await Promise.all(
-    registry.apps.map(async (app): Promise<ResolvedApp> => {
-      const href = resolveHref(app);
-      const shouldFetchManifesto =
-        app.external !== true && app.manifesto !== false;
-      const manifesto = shouldFetchManifesto
-        ? await fetchManifesto(app.path)
-        : null;
+  const resolved = registry.apps.map((app): ResolvedApp => {
+    const href = resolveHref(app);
+    const tags = app.tags ?? [];
+    // `featured` is DERIVED, never stored: manifesto enrichment present in the index.
+    const hasFeature =
+      Boolean(app.tagline) || tags.length > 0 || Boolean(app.screenshot);
 
-      const hasFeature =
-        manifesto !== null &&
-        (Boolean(manifesto.tagline) ||
-          Boolean(manifesto.tags?.length) ||
-          Boolean(manifesto.screenshot));
-
-      return {
-        slug: app.slug,
-        title: manifesto?.title ?? app.title,
-        href,
-        updatedAt: app.updatedAt,
-        featured: hasFeature,
-        tagline: manifesto?.tagline ?? null,
-        tags: manifesto?.tags ?? [],
-        screenshotUrl: resolveScreenshotUrl(href, manifesto?.screenshot),
-      };
-    }),
-  );
+    const resolvedApp: ResolvedApp = {
+      slug: app.slug,
+      title: app.title,
+      href,
+      featured: hasFeature,
+      tagline: app.tagline ?? null,
+      tags,
+      screenshotUrl: resolveScreenshotUrl(href, app.screenshot),
+    };
+    if (app.updatedAt !== undefined) {
+      resolvedApp.updatedAt = app.updatedAt;
+    }
+    return resolvedApp;
+  });
 
   return resolved.sort((a, b) => {
     if (a.featured !== b.featured) return a.featured ? -1 : 1;

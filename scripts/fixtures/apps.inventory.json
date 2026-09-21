@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "slug": "Zeta",
+      "title": "Zeta",
+      "path": "/zeta/",
+      "updatedAt": "2026-01-02T03:04:05.000Z",
+      "manifesto": true
+    },
+    {
+      "slug": "Alpha",
+      "title": "Alpha",
+      "path": "/alpha/",
+      "updatedAt": "2026-02-03T04:05:06.000Z",
+      "manifesto": true
+    },
+    {
+      "slug": "Ghost",
+      "title": "Ghost",
+      "path": "/ghost/",
+      "updatedAt": "2026-03-04T05:06:07.000Z",
+      "manifesto": true
+    },
+    {
+      "slug": "CivFixture",
+      "title": "Civ Fixture",
+      "path": "/civfixture/",
+      "updatedAt": "2026-04-05T06:07:08.000Z",
+      "manifesto": false
+    }
+  ]
+}

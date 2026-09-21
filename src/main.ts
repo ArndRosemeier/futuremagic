@@ -32,11 +32,15 @@ function renderAppCard(app: ResolvedApp, index: number): string {
           .map((t) => `<li>${escapeHtml(t)}</li>`)
           .join('')}</ul>`
       : '';
-  const updated = formatUpdatedAt(app.updatedAt);
+  // Only render the element when there is a REAL, parseable date. An app discovered on
+  // the apps host has no date at all, and an unparseable one is not a date: both render
+  // nothing, instead of an empty `<span>`.
+  const updated =
+    app.updatedAt !== undefined ? formatUpdatedAt(app.updatedAt) : '';
   const updatedHtml =
     updated !== ''
       ? `<span class="app-updated">Updated ${escapeHtml(updated)}</span>`
-      : '<span class="app-updated"></span>';
+      : '';
 
   const shotHtml =
     app.screenshotUrl !== null

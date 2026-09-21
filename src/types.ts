@@ -2,11 +2,24 @@ export type RegistryApp = {
   slug: string;
   title: string;
   path: string;
-  updatedAt: string;
+  /**
+   * OPTIONAL on purpose: the index is generated from a folder listing, which carries no
+   * date. A missing date means "unknown", never a synthesized fact — see
+   * `scripts/generate-app-index.mjs`.
+   */
+  updatedAt?: string;
   external?: boolean;
   url?: string;
-  /** When false, hub skips fetching `{path}futuremagic.json`. */
+  /**
+   * The INPUT flag `scripts/generate-app-index.mjs` reads to decide whether to fetch
+   * `{path}futuremagic.json` at build time. The runtime no longer fetches manifestos:
+   * the enrichment below is already inlined in the index.
+   */
   manifesto?: boolean;
+  /** Inlined from the app's `futuremagic.json` by the generator. */
+  tagline?: string;
+  tags?: string[];
+  screenshot?: string;
 };
 
 export type AppsRegistry = {
@@ -25,7 +38,8 @@ export type ResolvedApp = {
   slug: string;
   title: string;
   href: string;
-  updatedAt: string;
+  /** Absent when the index has no date for the app — main.ts then renders no label. */
+  updatedAt?: string;
   featured: boolean;
   tagline: string | null;
   tags: string[];

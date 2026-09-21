@@ -19,3 +19,11 @@ worktrees/
 .gate-logs/
 # The ONE gate lock (mkdir-based, shared by every worktree).
 .futuremagic-lock/
+
+# --- GENERATED app index: never hand-edit (scripts/generate-app-index.mjs) ---
+# A fresh clone has NEITHER file; `npm run build` creates both from the network.
+# apps.index.json is what the browser fetches at runtime. apps.json is a byte-identical
+# legacy copy that exists ONLY because deploy-clean.ps1:148-150 throws unless
+# dist/apps.json exists while :210-215 refuses to upload it. One generator, no drift.
+public/apps.index.json
+public/apps.json

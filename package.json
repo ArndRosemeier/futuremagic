@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "index": "node scripts/generate-app-index.mjs",
+    "verify:index": "node scripts/verify-app-index.mjs",
+    "build": "node scripts/generate-app-index.mjs && tsc && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
