@@ -354,6 +354,18 @@ QUEUE | row=12 | needs=dispatch | SEVERITY=low
   | No real app uses `.htm` today (both are Vite/static builds with `index.html`), so this is
     a divergence to close, not a fire. fix direction=accept `index.html` || `index.htm` as the
     app marker, matching the host exactly, and pin both.
+
+QUEUE | row=13 | needs=dispatch | SEVERITY=cosmetic | seen on the LIVE hub
+  | A card with NO screenshot prints its TITLE TWICE: `src/main.ts:53` renders
+    `<div class="app-shot-fallback">${app.title}</div>` inside the shot area, and the card body
+    renders the title again as the card's name. `expert` has a screenshot so it never showed;
+    `fracvibe` is the first screenshot-less card, so the rendered text reads "FracVibe FracVibe
+    Open →" (measured in a real browser against the live site, 2026-09-21).
+  | Pre-existing behaviour, not introduced by the apps-root work (it dates from the original
+    card renderer). fix direction=EITHER omit the fallback's text and let the shot area be a
+    plain placeholder, OR show the slug/`Open` there instead of repeating the title.
+  | Not urgent, but it is the FIRST thing visible on the new root, so it is the owner's call
+    whether to leave the duplicate title or drop it.
   | THE HUB'S OWN HOME. If `futuremagic.de` is eventually forwarded to
     `apps.futuremagic.de` (ledger row 8), the hub — which is served FROM `futuremagic.de` —
     has no home unless it moves too. The final forward is a one-way act that would otherwise
