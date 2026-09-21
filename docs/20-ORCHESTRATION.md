@@ -41,7 +41,7 @@ dispatching anything.
 ## Board
 
 ```
-reconciled: 1040796 · 2026-09-21T16:09+02:00 (session-13ea3b42, chief of staff)
+reconciled: d3f9b92 · 2026-09-21T16:2x+02:00 (session-13ea3b42, chief of staff)
 
 SESSION | cos=session-13ea3b42-847e-4025-97fa-e6aa5b169aba | model=deepseek-flash
   | role=chief of staff (designated by the owner 2026-09-21) | state=active
@@ -62,6 +62,17 @@ PROBE | probe=88f60cd3-2ca7-473b-a099-1eea2b9b8c6b | read-only
     concurrently) and it correctly reported its own correction. Its load-bearing claims
     were re-verified by the dispatcher: live registries FETCHED (12 apps / 3 stories),
     and deploy-clean.ps1's skip condition read in place. RETIRE after this landing.
+
+PROBE | probe=5e18d0c9-aa0c-4075-b125-3a0201c78e94 | read-only
+  | question="how does the hub consume the registry and the per-app manifesto, and what
+    breaks if the app list comes from a folder listing on another origin?"
+  | state=REPORTED, CONSUMED into docs/21-APPS-HOST-MIGRATION.md (§3 and §7-§9 are its
+    findings), into docs/18 §3 (the app-card ORDER seam, which the FIRST probe missed),
+    and RETIRED as part of this landing
+  | note=it CORRECTED the dispatcher: docs/21's first version claimed app cards render in
+    registry order, which was the STORIES ordering (src/main.ts:390-392) misapplied to app
+    cards. The real order is featured-then-title (src/registry.ts:138-141). See the TRAP
+    below. Its decisive find: the migration is achievable with ZERO source changes.
 
 LANDED | row=2-6 (ledger rows 2-6) | sha=1040796 | branch=master | base=6e9a6e1
   | verify=MY OWN, on the COMMITTED tree and with the COMMITTED script: gate FULL GREEN
@@ -145,6 +156,22 @@ QUEUE | row=15 | needs=OWNER
     whether the hub earns a test harness; if yes, that harness is itself a slice and
     docs/08-TESTING.md gets created by it.
 
+QUEUE | row=16 | needs=OWNER | blocks=the apps-host migration (docs/21)
+  | Switch the hub's app target to https://apps.futuremagic.de/ and make the publish skill
+    the discovery base. EXAMINED, not dispatched: docs/21-APPS-HOST-MIGRATION.md.
+  | MEASURED: the new host serves a public folder listing with 2 apps (expert, fracvibe)
+    while the hub links 12; and it sends NO Access-Control-Allow-Origin, so the hub cannot
+    read the listing or the manifests at runtime. The registry's LIST role is replaceable;
+    its METADATA role (title, updatedAt, order, enrichment) is not.
+  | RECOMMENDED: F1(a) a GENERATED same-origin index (build-time discovery from the host's
+    folders + enrichment folded in) and F2(a) staged per-record migration, which needs ZERO
+    source changes (`path` is used verbatim as href, src/registry.ts:87) but costs the
+    migrated app its tagline/tags/screenshot until F1 lands.
+  | REJECTED: a hard switch (10 of 12 links 404 silently) and runtime listing discovery
+    (impossible without ACAO on the apps host).
+  | WAITING ON: the owner answering F1 and F2 (docs/21 §8), plus the metadata-contract and
+    ~/apps-permanence questions in §10.
+
 TRAP | gate-summary-swallowed | MEASURED 2026-09-21, self-inflicted
   | The first scripts/gate.sh ran its body inside a `{ ... } > "$LOG"` group. `exit`
     inside that group exits the WHOLE script, so the run returned a CORRECT exit code
@@ -178,6 +205,14 @@ TRAP | gate-output-piped-through-grep | MEASURED 2026-09-21, self-inflicted
     The true exit was then captured by re-running the gate unpiped (exit 0). RULE: the
     gate's raw output goes to its log and the log is what gets read; never filter the
     gate itself, not even for display.
+
+TRAP | stories-order-applied-to-app-cards | MEASURED 2026-09-21, self-inflicted
+  | docs/21's first version asserted app cards render in "registry order, not date" and
+    cited src/main.ts:390-392. That citation is the STORIES list ordering; the app-card
+    order is featured-then-title at src/registry.ts:138-141. The claim was not invented --
+    it was a TRUE fact about a DIFFERENT list, carried across. RULE: before reusing a
+    finding, re-read the line it came from and confirm it is about the thing you are
+    describing. A neighbouring fact is the easiest wrong fact to believe.
 
 GUARD | gate-lock | mkdir-based, path=<main>/.futuremagic-lock derived from the git COMMON
   dir so every worktree shares ONE lock; owner file names pid/time/worktree/tier; a DEAD
