@@ -141,6 +141,41 @@ TRAP | killed-a-process-that-was-not-ours | MEASURED 2026-09-21, self-reported b
     Killing a process you did not start is an AGENTS §3 violation even when you put it back: the
     window is real, and a failed restart would have taken the live apps host down with nothing
     in place to restore it. Report instead of doing.
+  | CONSEQUENCE OBSERVED 2026-09-21, ~20 minutes later: the OWNER reported this banner on the
+    live apps host — "Uncaught NetworkError: Failed to execute 'importScripts' on
+    'WorkerGlobalScope': The script at 'https://apps.futuremagic.de/fracvibe/fractalKernel.js'
+    failed to load." The outage window is the LIKELY cause and it is not provable after the
+    fact: Cloudflare caches `.js` for `max-age=14400`, but any request that MISSES or
+    REVALIDATES during an origin outage gets a 5xx, and inside a Web Worker that surfaces as
+    exactly this load failure. The dispatcher could NOT reproduce it afterwards (see queue row
+    14) — the app loads and renders with 0 non-2xx responses.
+  | This is why the rule is not bureaucracy: an outage window is invisible in the happy path
+    and shows up as a stranger's error banner. Killing a shared process is not a local act.
+
+GUARD | publish-never-deletes | scripts/publish-apps-root.sh has no `--delete` and no `rm`.
+  | It matters MORE than it looks: the CDN caches `.js` for 4 hours (queue row 14) while
+    `index.html` and `apps.index.json` are served DYNAMIC (uncached). So a browser holding a
+    CACHED `index.html` can request the PREVIOUS build's fingerprinted `assets/index-<hash>.js`
+    long after a republish — and because this publish never deletes, that old asset is still
+    there and the stale page still works. Adding `--delete` would turn every stale cached
+    index.html into a blank page with no fallback.
+
+QUEUE | row=14 | needs=OWNER | an APP-side and INFRASTRUCTURE matter, NOT this repo
+  | THE CDN SERVES MIXED BUILDS. Measured 2026-09-21: of the 12 files published under
+    `/fracvibe/`, ELEVEN match the origin byte-for-byte and `fractalKernel.js` does NOT — the
+    CDN holds an OLD build of it (`last-modified 13:53:26 GMT`, `cf-cache-status: HIT`,
+    `age ~7000`, public 20,867 B vs origin 25,958 B; the stale one has `MAX_ITER = 2000` where
+    the current one raises the budget to 8192). FracVibe's app loads its worker with
+    `new Worker('fractalWorker.js')` → `importScripts('fractalKernel.js')` — NO cache-busting,
+    NO fingerprinted filenames — so one stale cache entry is served beside fresh siblings.
+  | The hub is IMMUNE to this class: Vite fingerprints its JS/CSS
+    (`assets/index-BYUlCwJi.js`), and `index.html`/`apps.index.json` return
+    `cf-cache-status: DYNAMIC`. That is luck of tooling, not a hub-side guard — worth knowing
+    before any future non-Vite asset is added to the hub.
+  | FIX OPTIONS, in order of durability: (a) fingerprint FracVibe's asset filenames so a
+    republish changes every URL; (b) purge Cloudflare's cache for `/fracvibe/*` after each
+    publish; (c) wait out the 4-hour TTL. FracVibe is ANOTHER PROJECT with another session
+    active in it — the dispatcher will not touch it.
 
 LANDED | row=9 (ledger row 9) | sha=72e62f7 | branch=feat/published-only → rebased onto
   master's 50a8919 and fast-forwarded, so 72e62f7 IS master
