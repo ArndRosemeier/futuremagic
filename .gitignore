@@ -8,3 +8,14 @@ dist
 
 __pycache__/
 *.py[cod]
+
+# --- process machinery (see AGENTS.md) ---
+# One worktree per writer lives in-repo (never /tmp: in this harness a /tmp write
+# can be a per-call tmpfs, so a worktree created there does not exist for the next
+# call). gitignored so it never appears in the main tree's status or a build.
+worktrees/
+# The gate's raw logs. Kept IN THE WORKSPACE on purpose, so a background run's
+# evidence outlives the process that wrote it.
+.gate-logs/
+# The ONE gate lock (mkdir-based, shared by every worktree).
+.futuremagic-lock/
