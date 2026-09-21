@@ -76,8 +76,12 @@ fi
 # --- records -----------------------------------------------------------------
 echo
 echo "=== records ==="
-LANDED="$(grep -c '^LANDED ' "$BOARD" 2>/dev/null || echo 0)"
-INFLIGHT="$(grep -c '^IN-FLIGHT ' "$BOARD" 2>/dev/null || echo 0)"
+# `grep -c` PRINTS 0 and EXITS 1 when there is no match, so `|| echo 0` appended a
+# SECOND "0" and the variable held two lines (measured: "0\n0", which printed a stray
+# "0" and made IN-FLIGHT read as non-empty). `|| true` keeps the single count that
+# grep already printed.
+LANDED="$(grep -c '^LANDED ' "$BOARD" 2>/dev/null || true)"
+INFLIGHT="$(grep -c '^IN-FLIGHT ' "$BOARD" 2>/dev/null || true)"
 echo "  LANDED=$LANDED  IN-FLIGHT=$INFLIGHT"
 
 # Every LANDED sha must exist on origin/master. A sha that exists only locally is
@@ -85,14 +89,18 @@ echo "  LANDED=$LANDED  IN-FLIGHT=$INFLIGHT"
 while IFS= read -r line; do
   [ -n "$line" ] || continue
   sha="$(printf '%s' "$line" | grep -o 'sha=[0-9a-f]\{7,\}' | head -1 | cut -d= -f2)"
-  row="$(printf '%s' "$line" | grep -o 'row=[0-9]*' | head -1 | cut -d= -f2)"
+  row="$(printf '%s' "$line" | grep -o 'row=[0-9][0-9-]*' | head -1 | cut -d= -f2)"
   [ -n "$sha" ] || { note "LANDED row=${row:-?} has no parseable sha= — a landing with no sha cannot be verified"; continue; }
+  # A LANDING in THIS project = committed locally AND verified by the dispatcher.
+  # Pushing is a SEPARATE, owner-requested act (AGENTS §6: a push publishes nothing,
+  # but the owner has not asked for one). So a sha that is not yet on origin/master is
+  # REPORTED, never flagged — Campaigner flags it because there every landing pushes.
   if git merge-base --is-ancestor "$sha" origin/master 2>/dev/null; then
-    echo "  LANDED row=$row sha=$sha  on origin/master: YES"
-  elif git cat-file -e "$sha^{commit}" 2>/dev/null; then
-    note "LANDED row=$row sha=$sha exists locally but is NOT on origin/master — an unlanded claim"
+    echo "  LANDED row=$row sha=$sha  committed: YES  on origin/master: YES (pushed)"
+  elif git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
+    echo "  LANDED row=$row sha=$sha  committed: YES  on origin/master: NO (local by design — push is an owner-requested act, AGENTS §6)"
   else
-    note "LANDED row=$row sha=$sha DOES NOT EXIST in this repo — invented or from another repo"
+    note "LANDED row=$row sha=$sha is NOT an ancestor of HEAD — it is not part of this tree's history (invented, rewritten, or from another repo)"
   fi
 done < <(grep '^LANDED ' "$BOARD" 2>/dev/null || true)
 
@@ -100,7 +108,7 @@ done < <(grep '^LANDED ' "$BOARD" 2>/dev/null || true)
 # LANDED row for the same row appeared (a classic STALE PAIR)?
 while IFS= read -r line; do
   [ -n "$line" ] || continue
-  row="$(printf '%s' "$line" | grep -o 'row=[0-9]*' | head -1 | cut -d= -f2)"
+  row="$(printf '%s' "$line" | grep -o 'row=[0-9][0-9-]*' | head -1 | cut -d= -f2)"
   br="$(printf '%s' "$line" | grep -o 'branch=[^ |]*' | head -1 | cut -d= -f2)"
   wt="$(printf '%s' "$line" | grep -o 'worktree=[^ |]*' | head -1 | cut -d= -f2)"
   st="$(printf '%s' "$line" | grep -o 'state=[^|]*' | head -1 | cut -d= -f2- | sed 's/ *$//')"
@@ -144,7 +152,7 @@ echo "=== host ==="
 echo "  load: $(cut -d' ' -f1-3 /proc/loadavg)"
 awk '/MemAvailable/{printf "  available memory: %d MB\n", $2/1024}' /proc/meminfo
 echo "  node/tsc/vite processes (any project — this box is shared):"
-if pgrep -af 'vitest|jest|playwright|tsc|vite build' 2>/dev/null | grep -v 'board.sh' | head -8 | sed 's/^/    /'; then
+if pgrep -af 'vitest|jest|playwright|tsc|vite build' 2>/dev/null | grep -v 'board.sh' | head -8 | cut -c1-140 | sed 's/^/    /'; then
   :
 else
   echo "    (none)"

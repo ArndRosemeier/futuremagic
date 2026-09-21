@@ -40,9 +40,11 @@ hand-rolls `tsc` or `vite build`: the script owns the lock, the log and the verd
 - **One expensive check at a time.** Enforced by the lock, never by a glance: two
   actors can look in the same instant, both see "free", and both start. *(inherited)*
 - **A killed or refused run is VOID**, never evidence. Re-run it under the lock.
-- **The gate is cheap here (~40s)**, so a foreground run is acceptable — but prefer a
-  background job with its log kept, and **never run a long check in the foreground in
-  the session the owner is talking to.** *(measured here: the owner will interrupt.)*
+- **The gate is cheap here — MEASURED ~1s** (typecheck + `vite build` = 237–284ms; the
+  first draft of this rule guessed "~40s", which was never measured) — so a foreground
+  run is acceptable, but prefer a background job with its log kept, and **never run a
+  long check in the foreground in the session the owner is talking to.** *(measured
+  here: the owner will interrupt.)*
 - **A subagent runs its checks IN-TURN.** A subagent's background jobs die when its
   turn ends — measured on this box: a probe's background `sleep 240` was gone ~20s
   after the turn ended. "Start it in the background and wait for the notice" works

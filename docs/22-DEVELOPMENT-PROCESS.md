@@ -22,12 +22,13 @@ deltas below in the same landing.
 |---|---|---|---|
 | Default branch | `main` | **`master`** | The remote's default is `master`. Every `origin/main` in the reference doc means `origin/master` here. |
 | Suite | ~4431 vitest tests, ~12 min | **NONE** | 44 tracked files, two devDeps. There is nothing to chunk, cap or skip. |
-| Gate | `scripts/gate.sh`, two tiers, memory watchdog | **`scripts/gate.sh`**, two tiers, no watchdog | Same exit-code vocabulary, sized to a ~40s gate. The header of that script states what is deliberately NOT ported and why. |
+| Gate | `scripts/gate.sh`, two tiers, memory watchdog | **`scripts/gate.sh`**, two tiers, no watchdog | Same exit-code vocabulary, sized to a gate MEASURED at ~1s (the first draft of this table said "~40s", which was a guess; the measurement is typecheck + build = 237–284ms). The header of that script states what is deliberately NOT ported and why. |
 | The ONE gate command | `scripts/gate.sh` | **`bash scripts/gate.sh`** | Exit 0 GREEN/verified · 1 RED · 2 compile-only/NOT verified · 3 plan-only · 9 lock held (refused, VOID). |
 | Package manager | pnpm | **npm** | `package-lock.json` is the committed lockfile; there is no `pnpm-lock.yaml`. `npm ci` reproduces the committed tree exactly and adds no file to the repo. (Host rule prefers the shared pnpm store *for pnpm projects*; introducing pnpm here would mean committing a second lockfile, which is the drift this table exists to prevent.) |
 | Worktrees | `<repo>/worktrees/<slice>` | **same** | In-repo, gitignored. Never `/tmp`. |
 | Session registry | `--home-administrator-projects-Campaigner--` | **`--home-administrator-projects-futuremagic--`** | Derived from the repo path by `scripts/board.sh`, never hardcoded. |
 | Deploy | push to `main` deploys to the live site | **manual, via `deploy-clean.ps1`; a push does NOT deploy** | See §3. |
+| What "LANDED" means | the sha is on `origin/main`, pushed as part of landing | **committed locally AND verified by the dispatcher; PUSHING is a separate, owner-requested act** | `scripts/board.sh` therefore REPORTS an unpushed landing as `on origin/master: NO (local by design)` instead of flagging it stale. In Campaigner the flag is right because every landing pushes; here it would cry stale on every single one. |
 
 ---
 

@@ -41,7 +41,7 @@ dispatching anything.
 ## Board
 
 ```
-reconciled: 6e9a6e1 · 2026-09-21T16:05+02:00 (session-13ea3b42, chief of staff)
+reconciled: 1040796 · 2026-09-21T16:09+02:00 (session-13ea3b42, chief of staff)
 
 SESSION | cos=session-13ea3b42-847e-4025-97fa-e6aa5b169aba | model=deepseek-flash
   | role=chief of staff (designated by the owner 2026-09-21) | state=active
@@ -56,16 +56,34 @@ HOST | load=8.66/5.17/4.30 | mem_available~16GB of 23GB | disk=7% of 581GB
 
 PROBE | probe=88f60cd3-2ca7-473b-a099-1eea2b9b8c6b | read-only
   | question="map the architecture, seams, data contracts and deploy path"
-  | state=REPORTED and CONSUMED into docs/18-ARCHITECTURE.md §1-§7 and queue rows 7-15
+  | state=REPORTED, CONSUMED into docs/18-ARCHITECTURE.md §1-§7 and queue rows 7-15,
+    and RETIRED (session deleted) as part of this landing
   | note=its report changed the repo under it mid-probe (the machinery was being written
     concurrently) and it correctly reported its own correction. Its load-bearing claims
     were re-verified by the dispatcher: live registries FETCHED (12 apps / 3 stories),
     and deploy-clean.ps1's skip condition read in place. RETIRE after this landing.
 
-IN-FLIGHT | row=2-6 | writer=THIS session (dispatcher is its own writer for this landing)
-  | branch=master | base=6e9a6e1 | state=committing 2026-09-21T16:0x
-  | scope=Day-1 process machinery: AGENTS.md, docs/17, docs/18, docs/20, docs/22,
-    scripts/gate.sh, scripts/board.sh, .gitignore. Nothing in src/ or public/ is touched.
+LANDED | row=2-6 (ledger rows 2-6) | sha=1040796 | branch=master | base=6e9a6e1
+  | verify=MY OWN, on the COMMITTED tree and with the COMMITTED script: gate FULL GREEN
+    exit 0 (typecheck exit 0; vite build exit 0, 9 modules, 237-284ms; raw log
+    .gate-logs/gate-20260921T160416.log) PLUS my own injection of ALL SIX gate exit
+    paths -- 0 normal, 9 with the lock held by a LIVE pid, 0 after clearing a STALE
+    dead-pid lock, 2 compile tier, 3 plan-only, 1 bad tier -- with the lock ABSENT after
+    every run. Also fetched the LIVE registries myself rather than trusting the probe
+    (12 apps / 3 stories, vs 3 / 0 in the repo).
+  | scope=AGENTS.md, docs/17, docs/18, docs/20, docs/22, scripts/gate.sh, scripts/board.sh,
+    .gitignore. NOTHING under src/ or public/ is touched (verified: `git status --porcelain
+    -- src public index.html package.json` returned 0 lines).
+  | push=NO -- a local landing by design (AGENTS §6). The owner has not asked for a push,
+    and a push publishes nothing anyway.
+  | retired=nothing to retire but the PROBE session (records above); no worktree and no
+    writer branch exist for this landing, because the dispatcher was its own writer.
+  | note=the gate's FIRST version swallowed its own summary by exiting from inside a
+    redirected brace group (TRAP gate-summary-swallowed); it was fixed forward BEFORE the
+    commit, so 1040796 contains the fixed script and the numbers above are a run of it.
+    This board and `scripts/board.sh` were then corrected once more in the commit following
+    this record, because Campaigner's "landed = pushed" check would have flagged this
+    landing stale on every future local landing here.
 
 QUEUE | row=7 | needs=dispatch | SEVERITY=DANGEROUS
   | Registry clobber. deploy-clean.ps1:210-215 skips apps.json/stories.json only when the
@@ -120,8 +138,6 @@ QUEUE | row=15 | needs=OWNER
     ENTIRE safety net, so a behaviour regression that still compiles is invisible. Decide
     whether the hub earns a test harness; if yes, that harness is itself a slice and
     docs/08-TESTING.md gets created by it.
-
-LANDED | row=none-yet | (this landing's sha is recorded in the commit that follows it)
 
 TRAP | gate-summary-swallowed | MEASURED 2026-09-21, self-inflicted
   | The first scripts/gate.sh ran its body inside a `{ ... } > "$LOG"` group. `exit`
