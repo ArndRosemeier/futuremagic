@@ -216,7 +216,27 @@ TRAP | dispatcher-reused-queue-row-numbers | MEASURED 2026-09-25, self-inflicted
     continue from the HIGHEST. Fixed by renumbering the newer records to 22-26 and repointing
     their three cross-references.
 
-QUEUE | row=27 | needs=OWNER | one step missing from the publish FLOW
+QUEUE-CLOSED | row=27 | RESOLVED 2026-09-25 — owner chose (a); the step is IN the skill
+  | Owner's answer to "publishing an app doesn't refresh the hub": **"Add the hub-refresh step
+    to the publish skill"**.
+  | LANDED in `~/.dsh/skills/apps-publish/SKILL.md`: a new **step 6** — after publishing an app,
+    IF a hub is installed at this root, run
+    `bash "$HOME/projects/futuremagic/scripts/publish-apps-root.sh"` — phrased conditionally so
+    the skill stays correct on a host with no hub, and stating plainly that publishing is not
+    finished until it runs.
+  | TWO CORRECTIONS IN THE SAME EDIT, both because the hub's arrival made the skill's own prose
+    false: (i) "The root directory listing is public, so folder names are visible" was no longer
+    true — the root is the HUB now, so the listing is gone and names are no longer enumerable
+    from `/`; (ii) the rule "Write only inside `~/apps/<name>/`" now names the hub refresh as its
+    ONE sanctioned exception (it writes the hub's own root files and never deletes), since
+    otherwise the skill would contradict its own new step.
+  | VERIFIED: the documented command was executed EXACTLY as written, from `/tmp` by absolute
+    path — exit 0, local-origin verification passed, and the live index still lists 3 cards.
+  | NOT VERIFIED BY THIS REPO'S GATE, AND THAT IS THE HONEST LIMIT: the skill file lives outside
+    this repository (`~/.dsh/skills/`), so `scripts/gate.sh` cannot see it and no commit here
+    carries it. Its only testable claim is the command, which was run. Its durability is the
+    harness's, not git's.
+  | was: needs=OWNER — presenting (a) add the step / (b) watcher (rejected) / (c) manual (rejected).
   | **PUBLISHING AN APP DOES NOT REFRESH THE HUB** (see the TRAP above). The skill publishes
     `~/apps/<name>/` and stops; the hub's index is regenerated only when the hub is built. So
     every new app stays invisible until someone runs `scripts/publish-apps-root.sh`.
