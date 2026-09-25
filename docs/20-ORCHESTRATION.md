@@ -41,8 +41,8 @@ dispatching anything.
 ## Board
 
 ```
-reconciled: f5a973b · 2026-09-21T18:0x+02:00 (session-13ea3b42, chief of staff) — the hub is
-  LIVE at https://apps.futuremagic.de/ (installed 2026-09-21, publish exit 0, live-verified)
+reconciled: 44c8c12 · 2026-09-25T17:2x+02:00 (session-13ea3b42, chief of staff) — the hub is
+  LIVE at https://apps.futuremagic.de/ with 3 cards (expert, fracvibe, imager)
 
 SESSION | cos=session-13ea3b42-847e-4025-97fa-e6aa5b169aba | model=deepseek-flash
   | role=chief of staff (designated by the owner 2026-09-21) | state=active
@@ -88,7 +88,7 @@ LANDED | row=10 (ledger row 10) | sha=f5a973b | branch=feat/apps-root → fast-f
       A a SYMLINKED app IS discovered (both real apps are symlinks — if this broke, the grid
         would be empty), a plain directory is discovered, a top-level file is not.
       B an `index.htm`-only folder is NOT discovered, while Python's http.server WOULD serve it
-        (its index list is index.html + index.htm). Measured divergence; queue row 12, not a
+        (its index list is index.html + index.htm). Measured divergence; queue row 25, not a
         blocker.
       C **THE PRE-FLIGHT OF THE POST-INSTALL ROOT** — the decisive one, run BEFORE installing:
         a root holding the hub's own `index.html`, `assets/`, `shots/`, `apps.json`,
@@ -128,7 +128,7 @@ TRAP | gate-gates-the-callers-cwd-not-itself | MEASURED 2026-09-21 by the WRITER
     its own exit 0 as VOID. The gate derives TREE from `git rev-parse --show-toplevel`, which
     follows the CALLER'S cwd, not the script's location.
   | RULE (interim): `cd <tree> && bash scripts/gate.sh`, and read the log's `tree=` line before
-    believing any verdict. FIX (queue row 11): derive TREE from `${BASH_SOURCE[0]}` so a
+    believing any verdict. FIX (queue row 24): derive TREE from `${BASH_SOURCE[0]}` so a
     worktree's gate always gates that worktree, whatever the caller's cwd.
 
 TRAP | killed-a-process-that-was-not-ours | MEASURED 2026-09-21, self-reported by the WRITER
@@ -153,14 +153,14 @@ TRAP | killed-a-process-that-was-not-ours | MEASURED 2026-09-21, self-reported b
     and shows up as a stranger's error banner. Killing a shared process is not a local act.
 
 GUARD | publish-never-deletes | scripts/publish-apps-root.sh has no `--delete` and no `rm`.
-  | It matters MORE than it looks: the CDN caches `.js` for 4 hours (queue row 14) while
+  | It matters MORE than it looks: the CDN caches `.js` for 4 hours (queue row 22) while
     `index.html` and `apps.index.json` are served DYNAMIC (uncached). So a browser holding a
     CACHED `index.html` can request the PREVIOUS build's fingerprinted `assets/index-<hash>.js`
     long after a republish — and because this publish never deletes, that old asset is still
     there and the stale page still works. Adding `--delete` would turn every stale cached
     index.html into a blank page with no fallback.
 
-QUEUE | row=14 | needs=OWNER | an APP-side and INFRASTRUCTURE matter, NOT this repo
+QUEUE | row=22 | needs=OWNER | an APP-side and INFRASTRUCTURE matter, NOT this repo
   | THE CDN SERVES MIXED BUILDS. Measured 2026-09-21: of the 12 files published under
     `/fracvibe/`, ELEVEN match the origin byte-for-byte and `fractalKernel.js` does NOT — the
     CDN holds an OLD build of it (`last-modified 13:53:26 GMT`, `cf-cache-status: HIT`,
@@ -177,7 +177,7 @@ QUEUE | row=14 | needs=OWNER | an APP-side and INFRASTRUCTURE matter, NOT this r
     publish; (c) wait out the 4-hour TTL. FracVibe is ANOTHER PROJECT with another session
     active in it — the dispatcher will not touch it.
 
-QUEUE | row=15 | needs=OWNER | INFRASTRUCTURE, not this repo — but it bit us once today
+QUEUE | row=23 | needs=OWNER | INFRASTRUCTURE, not this repo — but it bit us once today
   | THE APPS HOST HAS NO SUPERVISOR. It is a bare
     `python3 -m http.server 8082 --bind 127.0.0.1 --directory /home/administrator/apps`,
     spawned by the DSH auth proxy (ppid 883163), behind Cloudflare. EVIDENCE that nothing
@@ -190,6 +190,45 @@ QUEUE | row=15 | needs=OWNER | INFRASTRUCTURE, not this repo — but it bit us o
     beside it still loads — a half-dead site that looks like an app bug.
   | fix direction=put that one process under a supervisor (or serve the root from something
     that restarts itself). Owner's call; recorded here because this repo now depends on it.
+
+TRAP | publishing-an-app-does-not-refresh-the-hub | MEASURED 2026-09-25
+  | Owner: "There is a new app in the apps folder, but it does not appear in this web page
+    (Imager). It should have used the publish skill."
+  | NOTHING WAS WRONG with the app or with the skill: `~/apps/imager` is a symlink to
+    `Imager/dist` (created 15:31), the target HAS `index.html`, and
+    `https://apps.futuremagic.de/imager/` serves the real app (`<title>Imager</title>`, not a
+    directory listing). The generator run by hand found it at once
+    (`app folders: expert, fracvibe, imager`). The hub simply had NOT BEEN REBUILT — its grid is
+    a BUILD artifact (`public/apps.index.json`), so the live index still carried 2 cards.
+  | This is the F1(a) trade of ledger row 9 met in practice for the first time. The RULE is:
+    after publishing an app, refresh the hub. No caching was involved — the hub fetches
+    `/apps.index.json` with `cache: 'no-cache'` and Cloudflare serves it DYNAMIC, so the card
+    appears the moment the index is regenerated.
+  | FIXED at the time: rebuilt + republished (`publish-apps-root.sh` exit 0), and a real browser
+    confirmed 3 rendered cards. The missing STEP is queue row 27.
+
+TRAP | dispatcher-reused-queue-row-numbers | MEASURED 2026-09-25, self-inflicted
+  | While adding findings, the dispatcher numbered five NEW records 11-15 without checking the
+    board, where those numbers were ALREADY reserved by the original queue. Two records then
+    claimed each of rows 11, 12, 13, 14 and 15 — the very failure the doctrine records for two
+    writers claiming one row, committed by the actor whose job is to assign them.
+  | RULE: before assigning a row number, grep the board for the numbers already in use and
+    continue from the HIGHEST. Fixed by renumbering the newer records to 22-26 and repointing
+    their three cross-references.
+
+QUEUE | row=27 | needs=OWNER | one step missing from the publish FLOW
+  | **PUBLISHING AN APP DOES NOT REFRESH THE HUB** (see the TRAP above). The skill publishes
+    `~/apps/<name>/` and stops; the hub's index is regenerated only when the hub is built. So
+    every new app stays invisible until someone runs `scripts/publish-apps-root.sh`.
+  | RECOMMENDED (a): add ONE conditional step to the publish skill
+    (`~/.dsh/skills/apps-publish/SKILL.md`) — after publishing an app, IF a hub is installed at
+    the apps root, refresh it:
+    `bash /home/administrator/projects/futuremagic/scripts/publish-apps-root.sh`.
+    Conditional so the skill stays correct on a host with no hub. Cost: a ~1.5s hub rebuild.
+  | REJECTED (b): a watcher/cron that republishes the hub by itself — hidden magic, another
+    background process on a box whose apps origin has NO supervisor (row 23), and it could
+    republish while another actor is mid-edit.
+  | REJECTED (c): leaving it manual — zero coupling, but the gap recurs on every publish.
 
 LANDED | row=9 (ledger row 9) | sha=72e62f7 | branch=feat/published-only → rebased onto
   master's 50a8919 and fast-forwarded, so 72e62f7 IS master
@@ -385,7 +424,7 @@ QUEUE-CLOSED | row=20 | ANSWERED by the owner 2026-09-21: the hub goes to the AP
     already tells every app to use a `/<name>/` base, and this is why.
   | was: needs=OWNER — where does the hub live once the old site is forwarded?
 
-QUEUE | row=11 | needs=dispatch | SEVERITY=high (it produces VOID GREENs)
+QUEUE | row=24 | needs=dispatch | SEVERITY=high (it produces VOID GREENs)
   | THE GATE GATES THE CALLER'S CWD. `bash <worktree>/scripts/gate.sh` run from the MAIN tree
     gates the MAIN tree and reports GREEN for code the caller never touched — the writer hit it
     and correctly voided its own exit 0 (see the TRAP above).
@@ -394,7 +433,7 @@ QUEUE | row=11 | needs=dispatch | SEVERITY=high (it produces VOID GREENs)
     whatever the cwd. The lock and log paths must STILL come from the git common dir, so they
     stay shared. Then re-run the gate from BOTH trees and print the `tree=` line for each.
 
-QUEUE | row=12 | needs=dispatch | SEVERITY=low
+QUEUE | row=25 | needs=dispatch | SEVERITY=low
   | `index.htm` IS INVISIBLE TO THE GRID. The static host serves a folder whose index file is
     `index.htm` (Python's index list is `index.html` + `index.htm`), but the app rule is
     "contains `index.html`", so such a folder is reported `ignored (no index.html)` — served by
@@ -404,7 +443,7 @@ QUEUE | row=12 | needs=dispatch | SEVERITY=low
     a divergence to close, not a fire. fix direction=accept `index.html` || `index.htm` as the
     app marker, matching the host exactly, and pin both.
 
-QUEUE | row=13 | needs=dispatch | SEVERITY=cosmetic | seen on the LIVE hub
+QUEUE | row=26 | needs=dispatch | SEVERITY=cosmetic | seen on the LIVE hub
   | A card with NO screenshot prints its TITLE TWICE: `src/main.ts:53` renders
     `<div class="app-shot-fallback">${app.title}</div>` inside the shot area, and the card body
     renders the title again as the card's name. `expert` has a screenshot so it never showed;
