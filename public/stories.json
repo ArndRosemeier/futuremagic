@@ -1,4 +1,26 @@
 {
   "version": 1,
-  "stories": []
+  "stories": [
+    {
+      "slug": "the-last-letter-at-dunmore-pier",
+      "title": "The Last Letter at Dunmore Pier",
+      "date": "2026-07-27",
+      "excerpt": "",
+      "path": "/stories/the-last-letter-at-dunmore-pier.html"
+    },
+    {
+      "slug": "abundance",
+      "title": "Abundance",
+      "date": "2026-07-27",
+      "excerpt": "",
+      "path": "/stories/abundance.html"
+    },
+    {
+      "slug": "the-dragon-kept-the-receipt",
+      "title": "The Dragon Kept the Receipt",
+      "date": "2026-07-27",
+      "excerpt": "",
+      "path": "/stories/the-dragon-kept-the-receipt.html"
+    }
+  ]
 }
