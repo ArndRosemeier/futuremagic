@@ -237,6 +237,29 @@ QUEUE-CLOSED | row=27 | RESOLVED 2026-09-25 — owner chose (a); the step is IN 
     carries it. Its only testable claim is the command, which was run. Its durability is the
     harness's, not git's.
   | was: needs=OWNER — presenting (a) add the step / (b) watcher (rejected) / (c) manual (rejected).
+
+QUEUE | row=28 | needs=OWNER | the requested withdrawal of Playtron + Campaigner
+  | OWNER, verbatim: "please remove Playtron and Campaigner from the published app list for now.
+    Their successor 'Minion' is better and i do not want people to get distracted."
+  | RECONCILED 2026-10-02 (the world moved a long way since 2026-09-25): the apps root now holds
+    20 entries and the LIVE hub advertises **18 cards**. Both named apps are PUBLISHED folders —
+    `~/apps/Campaigner` → `projects/Migration/apps/Campaigner`, `~/apps/Playtron` →
+    `projects/Playtron/dist` — and both appear on the grid. **Minion is already published and
+    already listed** (`minion` → 200), so the successor needs nothing. The OLD site now 301s its
+    app URLs to the new host, so "the published app list" can only mean this hub's grid.
+  | THE MECHANISM GAP, measured: the grid MIRRORS the apps root, and `seed/apps.overlay.json`
+    can only DECORATE. `scripts/generate-app-index.mjs:210-237` reads `slug`/`title`/`updatedAt`
+    and SILENTLY IGNORES every other key except the four FORBIDDEN ones — so adding
+    `"hidden": true` TODAY is a silent NO-OP, not an error: the app would still be listed and
+    nothing would say why. Withdrawing an app from the LIST therefore needs code, unless the app
+    is unpublished instead.
+  | FORK FOR THE OWNER:
+    (A) HIDE — teach the overlay `hidden: true`: the card disappears, the app is STILL SERVED at
+        its URL, and it is reversible by deleting one key. Code change (generator + a pin + docs)
+        plus a republish.
+    (B) UNPUBLISH — remove `~/apps/<name>`: the apps leave the list AND stop being served (404 at
+        their URLs). Data-only and instant, but it dereferences anyone's existing link.
+  | RECOMMENDED: (A) — "for now", and it removes the distraction without breaking a URL.
   | **PUBLISHING AN APP DOES NOT REFRESH THE HUB** (see the TRAP above). The skill publishes
     `~/apps/<name>/` and stops; the hub's index is regenerated only when the hub is built. So
     every new app stays invisible until someone runs `scripts/publish-apps-root.sh`.
