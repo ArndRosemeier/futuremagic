@@ -41,8 +41,9 @@ dispatching anything.
 ## Board
 
 ```
-reconciled: 44c8c12 · 2026-09-25T17:2x+02:00 (session-13ea3b42, chief of staff) — the hub is
-  LIVE at https://apps.futuremagic.de/ with 3 cards (expert, fracvibe, imager)
+reconciled: 49e53e1 · 2026-10-02T17:4x+02:00 (session-13ea3b42, chief of staff) — the hub is LIVE
+  at https://apps.futuremagic.de/ with **16 cards**; `Campaigner` and `Playtron` are withheld from
+  the grid and still served at their URLs
 
 SESSION | cos=session-13ea3b42-847e-4025-97fa-e6aa5b169aba | model=deepseek-flash
   | role=chief of staff (designated by the owner 2026-09-21) | state=active
@@ -238,7 +239,33 @@ QUEUE-CLOSED | row=27 | RESOLVED 2026-09-25 — owner chose (a); the step is IN 
     harness's, not git's.
   | was: needs=OWNER — presenting (a) add the step / (b) watcher (rejected) / (c) manual (rejected).
 
-QUEUE | row=28 | needs=OWNER | the requested withdrawal of Playtron + Campaigner
+QUEUE-CLOSED | row=28 | DONE 2026-10-02 — owner chose (A) HIDE; landed, published, verified
+  | DELIVERED: `seed/apps.overlay.json` now carries `hidden: true` on `Campaigner` and
+    `Playtron`. The live grid went **18 → 16 cards**, both are absent from it, **Minion is still
+    listed**, and both withdrawn apps still answer **200** at their URLs (measured). Reversal is
+    deleting one key, or `hidden: false`.
+  | CODE: ledger row 11 — the overlay may now DECORATE **or WITHHOLD**. Hidden slugs match
+    case-insensitively; a hidden app's manifesto is NOT read (so an absent one is not a warning);
+    every withheld app is NAMED (`hidden: 2 [Campaigner, Playtron]`); and the overlay now FATALs
+    on any UNKNOWN key, so a typo like `hiden` can never again be a silent no-op.
+  | MY OWN VERIFICATION beyond the writer's five arms: an UPPERCASE `PLAYTRON` slug still
+    withholds the card (case-insensitivity holds); `hidden` on a NOT-published slug is dormant,
+    not a crash; and hiding the manifesto-bearing `Campaigner` alone drops `enrichment: found`
+    14 → 13, which is the proof the manifesto is genuinely NOT read. Live: 16 rendered cards in a
+    real browser, 0 withdrawn on the grid, 0 broken images, 0 console errors. Browser tree reaped
+    (0 headless processes left); the 17 non-headless Chrome processes belong to someone else and
+    were not touched.
+  | was: needs=OWNER — hide (recommended, code needed) vs unpublish (rejected: breaks URLs).
+
+QUEUE | row=29 | needs=OWNER | an app-shaped folder that reaches NOBODY
+  | `~/apps/CosmereCharacterSheet` is a published symlink but contains **no `index.html`**, so the
+    app rule ignores it and it is reported as `ignored (no index.html): CosmereCharacterSheet,
+    assets, shots, stories` on every build. (`assets`/`shots` are the hub's own; `stories` is the
+    stories content tree — those three are expected. THIS one is not obviously either.)
+  | CONSEQUENCE: if it is meant to be an app, it is invisible on the hub and nobody is told beyond
+    a summary line nobody reads. If it is NOT an app, it is a stray symlink in the publish root.
+  | fix direction=owner says which; then either its repo gets a real `index.html` or the symlink
+    goes. NOT urgent, but it is the kind of thing that sits unnoticed for months.
   | OWNER, verbatim: "please remove Playtron and Campaigner from the published app list for now.
     Their successor 'Minion' is better and i do not want people to get distracted."
   | RECONCILED 2026-10-02 (the world moved a long way since 2026-09-25): the apps root now holds
