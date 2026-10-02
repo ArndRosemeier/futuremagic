@@ -29,9 +29,13 @@
 //       summary as `ignored (no index.html): <names>` — NOT a warning, because the hub's own
 //       `assets/` and `shots/` directories sit at the apps root after this deploy. A
 //       top-level FILE (`README.md`) is ignored silently.
-//     * seed/apps.overlay.json is an EDITORIAL OVERLAY (title/date decoration only). It can
-//       NEVER add a card or move a link. An overlay entry whose folder is not an app is
-//       DORMANT: it produces no card and is only reported.
+//     * seed/apps.overlay.json is an EDITORIAL OVERLAY. It may DECORATE a published folder
+//       (title/date) or WITHHOLD its card (`hidden: true`); it can NEVER add a card, a path
+//       or a link. An overlay entry whose folder is not an app is DORMANT: it produces no
+//       card and is only reported. A `hidden: true` entry whose folder is NOT published is
+//       therefore dormant too — dormant, no card, no crash — exactly like any other
+//       un-published entry. Hiding is REPORTED by name (`hidden: N [names]`), never silent,
+//       and it NEVER touches the app folder: the app stays SERVED at its URL.
 //     * TITLE PRECEDENCE, explicitly: manifesto.title > overlay.title > folder name.
 //
 // NO RELATION TO THE OLD SITE
@@ -45,7 +49,10 @@
 //   {APPS_ROOT_DIR}/                   the apps root the static host serves — DISCOVERY.
 //   {APPS_ROOT_DIR}/{folder}/index.html the mark of an app — a directory without it is not one.
 //   {APPS_ROOT_DIR}/{folder}/futuremagic.json  one per app folder — ENRICHMENT + title.
-//   seed/apps.overlay.json             editorial decoration (title/updatedAt).
+//   seed/apps.overlay.json             editorial decoration (title/updatedAt) AND/OR
+//                                      withdrawal (hidden: true). Only the four keys
+//                                      `slug`, `title`, `updatedAt`, `hidden` are
+//                                      accepted; an UNKNOWN key is FATAL by name.
 //
 // OUTPUTS (both byte-identical, from this one generator so they cannot drift)
 //   public/apps.index.json   what `src/registry.ts` fetches at runtime (new name, so
@@ -57,10 +64,12 @@
 //
 // FAILURE CONTRACT
 //   All reading and validation happens BEFORE anything is written. A fatal error (a
-//   nonexistent/not-a-directory APPS_ROOT_DIR, a malformed overlay) exits non-zero and
-//   leaves the previously generated files BYTE-IDENTICAL. Absence is never invented: a
-//   missing manifesto is a warning with the card KEPT, and a missing `updatedAt` stays
-//   missing.
+//   nonexistent/not-a-directory APPS_ROOT_DIR, a malformed overlay — an unknown key, a
+//   forbidden key, a non-boolean `hidden`, a non-string title/updatedAt) exits non-zero
+//   and leaves the previously generated files BYTE-IDENTICAL. Absence is never invented:
+//   a missing manifesto is a warning with the card KEPT, and a missing `updatedAt` stays
+//   missing. A HIDDEN app is never read at all (it has no card to enrich), so its absent
+//   manifesto is neither a warning nor a manifesto read.
 //
 // ENV OVERRIDES (also the offline fixture seam — see scripts/verify-app-index.mjs)
 //   APPS_ROOT_DIR    default $HOME/apps                 the directory to DISCOVER in
@@ -82,8 +91,13 @@ const OUT_LEGACY = join(REPO, 'public/apps.json');
 const APP_MARKER = 'index.html';
 const MANIFESTO = 'futuremagic.json';
 
-// Keys the overlay must NEVER carry: it decorates an app folder, it does not define
-// one. A leftover key from the old `seed/apps.inventory.json` shape is FATAL by name.
+// Keys the overlay ACCEPTS. The overlay is HAND-MAINTAINED, so it accepts this list and
+// NOTHING else: a typo (`hiden: true`) is FATAL by name, because a silently-ignored key is
+// exactly how `hidden` would have been a no-op instead of a mistake.
+const OVERLAY_KNOWN_KEYS = ['slug', 'title', 'updatedAt', 'hidden'];
+
+// Keys the overlay must NEVER carry: it decorates or withholds an app folder, it does not
+// define one. A leftover key from the old `seed/apps.inventory.json` shape is FATAL by name.
 const OVERLAY_FORBIDDEN_KEYS = ['path', 'manifesto', 'external', 'url'];
 
 function withTrailingSlash(value) {
@@ -209,11 +223,26 @@ function readOverlay(raw) {
   const seen = new Set();
   const apps = data.apps.map((value, i) => {
     if (!isRecord(value)) throw new Error(`overlay app #${i} is not an object`);
+    // FORBIDDEN keys first, so an old inventory field gets its OWN message rather than the
+    // generic "unknown key" one. The four names are forbidden by name, forever.
     for (const key of OVERLAY_FORBIDDEN_KEYS) {
       if (key in value) {
         throw new Error(
-          `overlay app #${i} carries "${key}" — the overlay only DECORATES an app ` +
-            'folder (title/updatedAt); it cannot add a card, a path or a link',
+          `overlay app #${i} carries "${key}" — the overlay may DECORATE an app folder ` +
+            '(title/updatedAt) or WITHHOLD its card (hidden: true), but it cannot ADD a ' +
+            'card, a path or a link',
+        );
+      }
+    }
+    // Then ANYTHING else that is not a known key is FATAL by name. This is the guard that
+    // would have caught `hiden: true` instead of silently listing the app anyway.
+    for (const key of Object.keys(value)) {
+      if (!OVERLAY_KNOWN_KEYS.includes(key)) {
+        const namedSlug = nonEmptyString(value.slug);
+        throw new Error(
+          `overlay app #${i}${namedSlug === undefined ? '' : ` ("${namedSlug}")`} carries ` +
+            `UNKNOWN key "${key}" — the overlay accepts ONLY ${OVERLAY_KNOWN_KEYS.join(', ')}; ` +
+            'an unknown key is FATAL because a typo must never be a silent no-op',
         );
       }
     }
@@ -230,18 +259,28 @@ function readOverlay(raw) {
     if (value.updatedAt !== undefined && typeof value.updatedAt !== 'string') {
       throw new Error(`overlay app "${slug}" has a non-string updatedAt`);
     }
+    // `hidden` is a BOOLEAN, never a truthy string. The overlay is hand-maintained and a
+    // malformed entry must never be quietly reinterpreted: `"hidden": "true"` is FATAL.
+    if (value.hidden !== undefined && typeof value.hidden !== 'boolean') {
+      throw new Error(
+        `overlay app "${slug}" has a non-boolean hidden (${JSON.stringify(value.hidden)}) — ` +
+          'hidden must be exactly true or false',
+      );
+    }
     const entry = { slug };
     if (nonEmptyString(value.title) !== undefined) entry.title = value.title;
     if (typeof value.updatedAt === 'string') entry.updatedAt = value.updatedAt;
+    if (value.hidden === true) entry.hidden = true;
     return entry;
   });
   const version = typeof data.version === 'number' ? data.version : 1;
   return { version, apps };
 }
 
-// (b) ENRICHMENT — one LOCAL manifesto read per app folder, with or without an overlay
-// entry. Absent and non-JSON are both a WARNING with the card KEPT: an app may not ship a
-// manifesto yet. Nothing here touches the network.
+// (b) ENRICHMENT — one LOCAL manifesto read per VISIBLE app folder (a hidden app is not
+// read: it has no card), with or without an overlay entry. Absent and non-JSON are both a
+// WARNING with the card KEPT: an app may not ship a manifesto yet. Nothing here touches the
+// network.
 async function enrich(folders) {
   const enrichment = new Map(); // folder -> manifesto
   let found = 0;
@@ -293,17 +332,38 @@ async function main() {
   const overlay = readOverlay(await readFile(OVERLAY_PATH, 'utf8'));
 
   const { folders, ignored } = await discoverApps(APPS_ROOT_DIR);
-  const { enrichment, found, missing, warnings } = await enrich(folders);
 
-  // (c) BUILD the whole index IN MEMORY. Nothing is written until every step has succeeded.
+  // (c) WITHHOLD. A `hidden: true` overlay entry whose folder IS an app removes that
+  // folder from the grid — but NOT from the apps root: the app keeps being SERVED at its
+  // URL, and deleting the one key is the whole reversal.
+  const hiddenSlugs = new Set(
+    overlay.apps
+      .filter((entry) => entry.hidden === true)
+      .map((entry) => entry.slug.toLowerCase()),
+  );
+  const visibleFolders = folders.filter((folder) => !hiddenSlugs.has(folder.toLowerCase()));
+  const withheldFolders = folders.filter((folder) => hiddenSlugs.has(folder.toLowerCase()));
+
+  // The fold happens BEFORE enrichment on purpose: a hidden app has NO card to enrich, so
+  // its manifesto is never read — reading it could only emit a misleading missing-manifesto
+  // WARNING about a card that does not exist. Silence about a non-existent card is correct.
+  const { enrichment, found, missing, warnings } = await enrich(visibleFolders);
+
+  // BUILD the whole index IN MEMORY. Nothing is written until every step has succeeded.
   const overlayBySlug = new Map();
   for (const entry of overlay.apps) overlayBySlug.set(entry.slug.toLowerCase(), entry);
 
-  const cards = [];
+  // Every app folder matches its overlay entry — INCLUDING a hidden one. A hidden entry is
+  // NOT dormant: it is a deliberate withdrawal from the grid, reported by name below.
   const matchedOverlaySlugs = new Set();
   for (const folder of folders) {
     const overlayEntry = overlayBySlug.get(folder.toLowerCase());
     if (overlayEntry !== undefined) matchedOverlaySlugs.add(overlayEntry.slug.toLowerCase());
+  }
+
+  const cards = [];
+  for (const folder of visibleFolders) {
+    const overlayEntry = overlayBySlug.get(folder.toLowerCase());
     const manifesto = enrichment.get(folder) ?? {};
     // TITLE PRECEDENCE, explicitly: manifesto.title > overlay.title > folder name.
     const title =
@@ -325,7 +385,9 @@ async function main() {
 
   // (d) A DORMANT overlay entry — its folder is NOT an app — produces NO card. It is
   // KEPT and REPORTED: that is how `GM Cockpit` and friends come back the day those apps
-  // are republished. The grid mirrors the apps root, so the overlay may only decorate.
+  // are republished. A `hidden: true` entry whose folder is not published lands HERE too:
+  // dormant, no card, no crash, exactly like every other un-published entry. The grid
+  // mirrors the apps root, so the overlay may only decorate or withhold — never create.
   const dormant = overlay.apps.filter(
     (entry) => !matchedOverlaySlugs.has(entry.slug.toLowerCase()),
   );
@@ -354,6 +416,12 @@ async function main() {
   console.log(`apps root:       ${APPS_ROOT_DIR}`);
   console.log(`apps host base:  ${APPS_HOST_BASE} (URL prefix only — NEVER fetched)`);
   console.log(`apps written:    ${cards.length}`);
+  // A mechanism whose whole job is to make something invisible must be LOUDER than the
+  // thing it hides: every withheld card is NAMED here, so it is findable in six months.
+  console.log(
+    `hidden:          ${withheldFolders.length}` +
+      (withheldFolders.length > 0 ? ` [${withheldFolders.join(', ')}]` : ''),
+  );
   console.log(
     `enrichment:      found ${found}, missing ${missing}` +
       (warnings.length > 0 ? ` [${warnings.join(', ')}]` : ''),

@@ -134,10 +134,17 @@ Two consequences that bite:
   and still EMPTY, so its half of the hazard remains open — see
   `docs/18-ARCHITECTURE.md` §4 hazard 1 and board queue row 18.
 - **The hub lists ONLY what is published under `~/apps`.** The generated grid MIRRORS
-  the apps root (ledger row 9): the cards ARE the app folders, and
-  `seed/apps.overlay.json` may only DECORATE them with a title and a date — it can never
-  add a card, and an entry whose folder is not an app is DORMANT (no card, reported).
-  The old copies stay serviceable but UNLISTED, and the old-site registry,
+  the apps root (ledger rows 9 + 11): the cards ARE the app folders, and
+  `seed/apps.overlay.json` may DECORATE them with a title and a date **or WITHHOLD a
+  card with `hidden: true`** — it can never add a card, and an entry whose folder is not
+  an app is DORMANT (no card, reported). Hiding removes the CARD and nothing else: the
+  folder stays published and the app stays **SERVED** at its URL, the run NAMES every
+  withheld app (`hidden: N [names]`), the hidden app's manifesto is not read (so an
+  absent one is not a warning), and deleting the one key — or `hidden: false` — restores
+  the card. The overlay accepts ONLY `slug`/`title`/`updatedAt`/`hidden`; an **unknown
+  key is FATAL by name** (a typo like `hiden` must never be a silent no-op), as are the
+  four forbidden `path`/`manifesto`/`external`/`url`. The old copies stay serviceable but
+  UNLISTED, and the old-site registry,
   `scripts/Register-FuturemagicApp.ps1`, `$ProtectedDirs` and `seed/manifestos/` are
   PARK-UNTIL-FORWARD — do not churn them, and do not edit the Windows deploy script for
   the apps half.

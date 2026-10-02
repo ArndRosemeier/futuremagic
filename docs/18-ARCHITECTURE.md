@@ -22,7 +22,8 @@ built to `dist/` by Vite and published to <https://futuremagic.de/>.
 top-level DIRECTORY that CONTAINS `index.html` is a card**), folds each app folder's
 `futuremagic.json` inline, and writes `public/apps.index.json` (plus a byte-identical
 legacy `public/apps.json`). The grid MIRRORS the apps root — the list of cards IS the
-list of app folders — and the generator makes **NO HTTP request at all** (ledger row
+list of app folders, MINUS any folder the editorial overlay WITHHOLDS with
+`hidden: true` (ledger row 11) — and the generator makes **NO HTTP request at all** (ledger row
 10). The hub is being installed AT that root, so a local read is the only discovery that
 its own `index.html` cannot shadow (board TRAP `hub-at-the-root-blinds-discovery`). The
 browser then fetches `/apps.index.json` and `/stories.json` from its OWN origin
@@ -52,13 +53,13 @@ see §5.
 | | `public/apps.json` | byte-identical legacy copy of the above, untracked; exists only for `deploy-clean.ps1:148-150` | — |
 | data (hand shadow) | `public/stories.json` | **empty** — 0 vs 3 live | 4 |
 | | `public/shots/*.png` | 7 screenshots | — |
-| content pipeline | `seed/apps.overlay.json` | **the EDITORIAL overlay** — `title`/`updatedAt` decoration for PUBLISHED folders only; it cannot add a card | 69 |
+| content pipeline | `seed/apps.overlay.json` | **the EDITORIAL overlay** — `title`/`updatedAt` decoration and `hidden` withholding for PUBLISHED folders only; it cannot add a card; an UNKNOWN key is FATAL by name | 80 |
 | | `seed/manifestos/*.json` | 7 manifestos, one per app folder (OLD-host deploy seeding, NOT a generator input) | 6 each |
 | | `stories/*.md` + `stories/README.md` | story source | 33 + 30 |
 | | `tools/story_manager/*.py` | Python FTP story publisher | 732 total |
 | | `Story manager.bat` | Windows launcher | 30 |
-| generate | `scripts/generate-app-index.mjs` | LOCAL apps-root discovery (the ONLY source of existence) + per-folder manifesto read + overlay decoration → the index (atomic on success, NO network) | 378 |
-| | `scripts/verify-app-index.mjs` | offline fixture differential for the generator's pins (8 pins, no server) | 479 |
+| generate | `scripts/generate-app-index.mjs` | LOCAL apps-root discovery (the ONLY source of existence) + per-folder manifesto read (SKIPPED for hidden folders) + overlay decoration/withholding → the index (atomic on success, NO network) | 446 |
+| | `scripts/verify-app-index.mjs` | offline fixture differential for the generator's pins (8 pin families, no server) | 646 |
 | | `scripts/fixtures/**` | fixture apps ROOT + fixture overlay used by that differential | — |
 | | `scripts/publish-apps-root.sh` | publish `dist/` into the apps root; builds first, NEVER deletes, verifies the local origin | 142 |
 | deploy | `deploy-clean.ps1` | manual hub deploy over FTP | 283 |
@@ -69,15 +70,15 @@ see §5.
 
 | The one way to do X | Owns it | Gotchas |
 |---|---|---|
-| **Add an app to the hub** | `scripts/generate-app-index.mjs` (DISCOVERY is the ONLY source of existence) + `seed/apps.overlay.json` (decoration) | Publishing a DIRECTORY **that CONTAINS `index.html`** under the apps root ADDS a card at the next `npm run build` — its title is the folder name unless decorated — so no hub edit is needed; removing the directory (or its `index.html`) removes the card. Discovery reads `APPS_ROOT_DIR` (default `$HOME/apps`) as a LOCAL DIRECTORY, never over HTTP: the hub itself lives at that root now, and its own `index.html` would shadow the host's directory listing (ledger row 10, board TRAP `hub-at-the-root-blinds-discovery`). A directory WITHOUT `index.html` is NOT an app — the static host could not serve it as one — and is reported as `ignored (no index.html): <names>` (a summary line, NOT a warning: the hub's own `assets/` and `shots/` sit there). A top-level FILE is ignored silently. `seed/apps.overlay.json` may only DECORATE an app folder (an editorial `title`, an `updatedAt`); it can NEVER add, move or link a card, and an overlay entry whose folder is not an app is DORMANT (no card; reported as `dormant overlay entries`). The OLD path — `scripts/Register-FuturemagicApp.ps1:102-204` upserting the **remote** `/webseiten/apps.json` — still runs on an app's own deploy, but **the hub no longer reads that file**, so it no longer adds a card. `deploy-clean.ps1` still requires `dist/apps.json` to EXIST (`:148-150`); the generator writes it. |
+| **Add an app to the hub** | `scripts/generate-app-index.mjs` (DISCOVERY is the ONLY source of existence) + `seed/apps.overlay.json` (decoration/withholding) | Publishing a DIRECTORY **that CONTAINS `index.html`** under the apps root ADDS a card at the next `npm run build` — its title is the folder name unless decorated — so no hub edit is needed; removing the directory (or its `index.html`) removes the card. Discovery reads `APPS_ROOT_DIR` (default `$HOME/apps`) as a LOCAL DIRECTORY, never over HTTP: the hub itself lives at that root now, and its own `index.html` would shadow the host's directory listing (ledger row 10, board TRAP `hub-at-the-root-blinds-discovery`). A directory WITHOUT `index.html` is NOT an app — the static host could not serve it as one — and is reported as `ignored (no index.html): <names>` (a summary line, NOT a warning: the hub's own `assets/` and `shots/` sit there). A top-level FILE is ignored silently. `seed/apps.overlay.json` may DECORATE an app folder (an editorial `title`, an `updatedAt`) or WITHHOLD its card (`hidden: true`); it can NEVER add, move or link a card, and it accepts ONLY the keys `slug`, `title`, `updatedAt`, `hidden` — an UNKNOWN key (e.g. the typo `hiden`) is FATAL by name, because a silently-ignored key is exactly how a withdrawal would become a no-op (ledger row 11). Hiding REMOVES the card but NOT the app: the folder stays published and the app is still SERVED at its URL, so deleting the one key is the whole reversal; every withheld card is NAMED in the summary (`hidden: N [names]`). An overlay entry whose folder is not an app is DORMANT (no card; reported as `dormant overlay entries`) — including a `hidden: true` one, which withholds nothing. The OLD path — `scripts/Register-FuturemagicApp.ps1:102-204` upserting the **remote** `/webseiten/apps.json` — still runs on an app's own deploy, but **the hub no longer reads that file**, so it no longer adds a card. `deploy-clean.ps1` still requires `dist/apps.json` to EXIST (`:148-150`); the generator writes it. |
 | **Parse an app record** | `parseRegistryApp` `src/registry.ts:7-41`, `parseRegistry` `:43-52` | Required strings: `slug`, `title`, `path` (`:13-18`). **`updatedAt` is OPTIONAL** (`src/types.ts:10`) — a record without one is KEPT (`:23-24`), because a published folder carries no date of its own and a synthesized date would be a fabricated fact. Optional: the INLINE enrichment `tagline`/`tags`/`screenshot` (`:28-38`). There is **NO `external`/`url`/`manifesto` any more** — dead capability removed with ledger row 9, once the generator could no longer emit them (`docs/21` §8's data-only cross-host move is gone). Invalid entries are still SILENTLY DROPPED (`:47-50`) — the generator's fatal-on-malformed-overlay is the build-time check that makes that safe, because the only writer of this file is the generator. `path` is used **verbatim** as the `href` (`:56-58`); the generator always writes it absolute on the apps host, and only the trailing slash is normalised. |
 | **Order the app cards** | `src/registry.ts:105-108` | **`featured` first, then `title.localeCompare`** — NOT registry order, NOT date. `featured` is **derived**, never stored and never displayed: any inline `tagline`/`tags`/`screenshot` (`:86-88`). So losing a tagline un-features a card and reorders the grid; `updatedAt` plays no part in order. (The stories list DOES order by registry order — `src/main.ts:394-396` — which is a different list; conflating the two was a real dispatcher error, board TRAP.) |
-| **Decide what is on a card** | `scripts/generate-app-index.mjs:135-148,196-289` (folds it in) → `src/registry.ts:83-103` (renders it) | A card's TITLE follows `manifesto.title` > overlay `title` > folder name (`scripts/generate-app-index.mjs:271-277`); its `updatedAt` comes from the overlay ONLY and the key is OMITTED when absent. Enrichment is INLINE in the generated index: the generator validates each `futuremagic.json` (`tags` kept only if EVERY element is a string) and copies `tagline`/`tags`/`screenshot`. The RUNTIME fetches no manifesto. EVERY app folder's LOCAL manifesto is read, overlay entry or not (the board-row-19 fix); a non-app overlay entry contributes nothing. A missing manifesto is a build-time WARNING + un-enriched card; a missing `updatedAt` renders NO "Updated" element at all (`src/main.ts:38-43`). |
+| **Decide what is on a card** | `scripts/generate-app-index.mjs:284-327` (folds it in), `:336-345` (withholds), `:364-384` (builds the card) → `src/registry.ts:83-103` (renders it) | A card's TITLE follows `manifesto.title` > overlay `title` > folder name (`scripts/generate-app-index.mjs:368-370`); its `updatedAt` comes from the overlay ONLY and the key is OMITTED when absent. Enrichment is INLINE in the generated index: the generator validates each `futuremagic.json` (`tags` kept only if EVERY element is a string) and copies `tagline`/`tags`/`screenshot`. The RUNTIME fetches no manifesto. EVERY **visible** app folder's LOCAL manifesto is read, overlay entry or not (the board-row-19 fix); a non-app overlay entry contributes nothing. A HIDDEN folder is excluded BEFORE enrichment, because it has no card to enrich — so its absent manifesto is neither a read nor a warning (ledger row 11). A missing manifesto is a build-time WARNING + un-enriched card; a missing `updatedAt` renders NO "Updated" element at all (`src/main.ts:38-43`). |
 | **Resolve an app's image** | `resolveScreenshotUrl` `src/registry.ts:60-71` | There is NO icon field; only `screenshot` (`src/types.ts:14`). An absolute `/…` or `http(s)://…` is used verbatim; anything else is appended to the app's `href` (`:67-70`). Missing image → console warn + text fallback (`src/main.ts:281-291`). |
 | **Capture screenshots** | `scripts/capture-app-shots.mjs` | **BROKEN:** imports `playwright`, which is not a dependency (`package.json:13-16`), and hardcodes 3 targets (`:8-21`) for 7 committed shots. |
 | **List / render stories; TOC; highlight** | `loadStories` `src/stories.ts:36-43` → `renderStoriesList` `src/main.ts:380-414` → `mountStoryReader` `src/storyReader.ts:169-374` | TOC is built from `h1`–`h6` (`:63-65,75-106`) with slugified, deduped ids (`:86`, `:32-41`). Highlight = a reading line 22% from the top; the spy locks ~700ms after a TOC click (`:280-289,326-334`). Order is registry order, NOT date (`src/main.ts:394-396`). |
 | **Publish a story** | `tools/story_manager/app.py` → `parse_story_file` (`markdown_story.py:71-98`) → `publish_selected` (`app.py:317-362`) | Slug = filename stem (`:79,31-35`); `date` defaults to today; `title` falls back to the first H1, then the filename (`:81-83`). Uploads `stories/<slug>.html` and rewrites the **remote** `stories.json` (`:338-352`). Windows-only launcher. |
-| **Author a manifesto** | `<APPS_ROOT_DIR>/{folder}/futuremagic.json`, read by `scripts/generate-app-index.mjs:214-243` | Read from the app's OWN folder in the LOCAL apps root at BUILD time. The filename must be exactly `futuremagic.json`. EVERY app folder is read — there is no `manifesto: false` opt-out any more (`external`/`url`/`manifesto` were removed as dead capability, ledger row 9). `seed/manifestos/<AppFolder>.json` is the OLD-host deploy's seed (`deploy-clean.ps1:261-273`) and is **NOT** an input to the generator. `title` IS now consumed (precedence: `manifesto.title` > overlay `title` > folder name); `tagline`/`tags`/`screenshot` are inlined. An absent or non-JSON manifesto is a WARNING (card kept, un-enriched). The LOCAL read is why nothing can shadow it: the hub's own `index.html` sits beside these folders, not on the path to them (ledger row 10). |
+| **Author a manifesto** | `<APPS_ROOT_DIR>/{folder}/futuremagic.json`, read by `scripts/generate-app-index.mjs:284-327` | Read from the app's OWN folder in the LOCAL apps root at BUILD time. The filename must be exactly `futuremagic.json`. EVERY **visible** app folder is read — there is no `manifesto: false` opt-out any more (`external`/`url`/`manifesto` were removed as dead capability, ledger row 9) — while a folder WITHHELD by `hidden: true` is NOT read at all, because it has no card to enrich (ledger row 11). `seed/manifestos/<AppFolder>.json` is the OLD-host deploy's seed (`deploy-clean.ps1:261-273`) and is **NOT** an input to the generator. `title` IS now consumed (precedence: `manifesto.title` > overlay `title` > folder name); `tagline`/`tags`/`screenshot` are inlined. An absent or non-JSON manifesto is a WARNING (card kept, un-enriched). The LOCAL read is why nothing can shadow it: the hub's own `index.html` sits beside these folders, not on the path to them (ledger row 10). |
 | **Build the site** | `package.json:10` — `npm run build` | `= node scripts/generate-app-index.mjs && tsc && vite build`. Requires `npm ci` first (`node_modules/` is not committed) and reads the LOCAL apps root (`APPS_ROOT_DIR`, default `$HOME/apps`). **It needs NO network at all** (ledger row 10): `APPS_HOST_BASE` is a URL prefix, never fetched, and an arm of `npm run verify:index` proves it by pointing that variable at an unroutable `.invalid` host through a dead proxy and still exiting 0. `npm run index` (`:8`) runs just the generator; `npm run verify:index` (`:9`) is the offline fixture differential (no server, no socket). |
 | **Publish the hub to the apps root** | `scripts/publish-apps-root.sh` | This is what makes `https://apps.futuremagic.de/` BE the hub. Target = `$1`, else `$APPS_ROOT_DIR`, else `$HOME/apps`; refuses a target that does not exist or is not a directory; runs `npm run build` FIRST and publishes NOTHING if it fails; copies `dist/` CONTENTS in, OVERWRITING only files the hub ships and **NEVER deleting** (no `--delete`, no `rm`: the app folders belong to their own deploys); then verifies by fetching the LOCAL origin `http://127.0.0.1:8082/` (bypasses the CDN, per the apps-publish skill) and asserting the HUB (`id="app"`) rather than a directory listing, quoting the HTTP code. Exit 0 only if all of that held. |
 | **Deploy the hub** | `deploy-clean.ps1` (manual, PowerShell, FTP) | See §5. It uploads the generated `dist/apps.index.json` (a name `:210-215` does not skip) and merely requires `dist/apps.json` to exist (`:148-150`), which the generator also writes. |
@@ -104,8 +105,10 @@ disagree about what a valid record is.
 from the LOCAL apps root at BUILD time by the generator
 (`scripts/generate-app-index.mjs:135-148,214-243`): `title` (now CONSUMED — it is the first
 level of the title precedence), `tagline`, `tags` (kept only if every element is a
-string), `screenshot`. One is read for EVERY app folder, overlay entry or not; there is no
-opt-out flag. Unknown keys are ignored. An absent / non-JSON manifesto is a build-time
+string), `screenshot`. One is read for EVERY **visible** app folder, overlay entry or not;
+a folder withheld by the overlay (`hidden: true`) is NOT read, and there is no
+`manifesto: false` opt-out flag (ledger row 11). Unknown keys are ignored. An absent /
+non-JSON manifesto is a build-time
 warning and the card is un-enriched; unlike the old HTTP read, there is no transport
 failure to be fatal — a LOCAL read either returns bytes or an errno.
 `src/types.ts:22-33` keeps the `AppManifesto` type as the documented contract between an
@@ -139,27 +142,33 @@ app and the generator (the runtime no longer fetches it).
    `pwsh` or `powershell`** — so neither the hub deploy nor the story publish can run
    here as written. A change to either cannot be end-to-end verified on this host.
 
-## 5 · What ships vs what is live — measured 2026-09-21
+## 5 · What ships vs what is live — re-measured 2026-10-02
 
 | Registry | In the repo | LIVE | Delta |
 |---|---|---|---|
-| `public/apps.index.json` | **generated, untracked** | **2 cards** (`expert`, `fracvibe`) | written by `npm run build` from the LOCAL apps-root directory (`APPS_ROOT_DIR`) + `seed/apps.overlay.json` (decoration only); **11** overlay entries are DORMANT |
+| `public/apps.index.json` | **generated, untracked — 16 cards** | **18 cards** (still the pre-republish hub) | written by `npm run build` from the LOCAL apps-root directory (`APPS_ROOT_DIR`) + `seed/apps.overlay.json` (decoration/withholding); **2** entries are HIDDEN — `Campaigner`, `Playtron`, both PUBLISHED and still SERVED, their cards withheld (ledger row 11) — and **1** overlay entry is DORMANT (`Orion`) |
 | `stories.json` | 0 stories (tracked shadow) | **3 stories** | `the-last-letter-at-dunmore-pier`, `abundance`, `the-dragon-kept-the-receipt` |
 
-Published folders (measured 2026-09-21): `expert/` (a SYMLINK to the Expert repo's
-`dist/`) and `fracvibe/` — plus the FILE `README.md`, which is not a card. The apps root
-itself is the directory the static host serves and, after the hub is published there, the
-directory this hub occupies.
+Published folders (measured 2026-10-02, 18): `ArmchairGeneral/`, `BlasterMaster/`,
+`Campaigner/`, `Civ/`, `ColossusWeb/`, `Conquest/`, `EccentriCity/`, `Eco/`, `GM_Helper/`,
+`LlmTable/`, `Norgo/`, `Playtron/`, `expert/` (a SYMLINK to the Expert repo's `dist/`),
+`filestore/`, `fracvibe/`, `imager/`, `minion/`, `xenoworld/` — plus the directories
+`CosmereCharacterSheet/`, `assets/`, `shots/` and `stories/`, which have NO `index.html`
+and are therefore NOT apps (`ignored (no index.html)`), and top-level files such as
+`README.md`, which are ignored silently. The apps root itself is the directory the static
+host serves and, after the hub is published there, the directory this hub occupies.
 
-Dormant overlay slugs (11): `LlmTable, ColossusWeb, ArmchairGeneral, Conquest, Eco,
-EccentriCity, GM_Helper, Campaigner, BlasterMaster, Civ, Orion`.
+Dormant overlay slug (1): `Orion`. Hidden overlay slugs (2): `Campaigner`, `Playtron` —
+hidden is NOT dormant: their folders ARE apps, so their cards are deliberately WITHHELD and
+the summary names them (`hidden: 2 [Campaigner, Playtron]`). Deleting the one `hidden` key
+from an entry restores its card; nothing about the app folder changes either way.
 
 **The apps half is no longer a shadow, and the grid MIRRORS the host.**
-`seed/apps.overlay.json` is DECORATION for app folders and the generated index is
-what the browser reads; the generator reads each app folder's `futuremagic.json`
-itself, so a newly published folder is enriched with no hub edit (the board-row-19 fix).
-Of the 12 old-site apps the overlay remembers, only `expert` is published under `~/apps`,
-so the other 11 entries are inert (dormant) and produce no card until that app is
+`seed/apps.overlay.json` is DECORATION or WITHHOLDING for app folders and the generated
+index is what the browser reads; the generator reads each VISIBLE app folder's
+`futuremagic.json` itself, so a newly published folder is enriched with no hub edit (the
+board-row-19 fix), and a `hidden: true` folder is not read at all. An overlay entry whose
+folder is not published is inert (dormant) and produces no card until that app is
 republished on the new host. The **stories** half is
 unchanged: `public/stories.json` is owned by the server (the Story Manager writes it),
 which is why `deploy-clean.ps1` tries to skip it. Do not treat the repo's empty
@@ -174,7 +183,7 @@ which is why `deploy-clean.ps1` tries to skip it. Do not treat the repo's empty
   (both drop bad entries silently — the app side is now fed only by the generator, the
   story side by the hand-managed server registry).
 - The app list now has ONE source of EXISTENCE (the apps-root DIRECTORY listing) plus ONE
-  editorial overlay (`seed/apps.overlay.json`, decoration only) and a generator;
+  editorial overlay (`seed/apps.overlay.json`, decoration or withholding) and a generator;
   `seed/manifestos/` (7) is still a second, OLD-host-only list (PARK-UNTIL-FORWARD,
   ledger row 8), and `$ProtectedDirs` (8, `deploy-clean.ps1:20-29`) is a deploy-protection
   list that still disagrees with the 12 old-site apps and protects a site the hub no

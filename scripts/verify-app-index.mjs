@@ -18,23 +18,33 @@
 // Fixture shape (scripts/fixtures/appsroot):
 //   zeta/     index.html + futuremagic.json   -> a card, ENRICHED
 //   alpha/    index.html only                 -> a card, un-enriched (missing-manifesto WARNING)
+//   omega/    index.html only                 -> WITHHELD by the overlay (`hidden: true`),
+//                                                so NO card and NO warning: never read
 //   newapp/   NO index.html                   -> NOT an app; reported as ignored
 //   assets/   NO index.html                   -> NOT an app; reported as ignored (the hub's own)
 //   README.md a top-level FILE                -> ignored SILENTLY
-// The fixture overlay (scripts/fixtures/apps.overlay.json) decorates `Zeta` and `alpha`
-// and has one DORMANT entry, `Ghost`, whose folder is not an app.
+// The fixture overlay (scripts/fixtures/apps.overlay.json) decorates `Zeta` and `alpha`,
+// WITHHOLDS the published `omega`, and has one DORMANT entry, `Ghost`, whose folder is not
+// an app.
 //
 // Pins exercised here (the brief's numbering):
 //   1  a DIRECTORY containing `index.html` becomes a card; a directory WITHOUT one does
-//      not, and is NAMED under `ignored (no index.html)`
-//   2  a top-level FILE is not a card
-//   3  a local manifesto enriches the card; a missing one warns and KEEPS the card
-//   4  a missing/nonexistent APPS_ROOT_DIR exits NON-ZERO with the index BYTE-IDENTICAL
-//   5  a dormant overlay entry produces NO card and is reported
-//   6  title precedence holds at all three levels (manifesto > overlay > folder name)
+//      not, and is NAMED under `ignored (no index.html)`; a PUBLISHED folder with
+//      `hidden: true` produces NO card (and `hidden: false` restores it — arm k)
+//   2  the summary NAMES every hidden app (`hidden: N [names]`)
+//   3  a local manifesto enriches the card; a missing one warns and KEEPS the card —
+//      but a HIDDEN app's manifesto is NOT read and its absence produces NO warning
+//   4  a missing/nonexistent APPS_ROOT_DIR exits NON-ZERO with the index BYTE-IDENTICAL;
+//      a `hidden: true` entry whose folder is NOT published is DORMANT (no card, no crash,
+//      reported consistently — arm j)
+//   5  a dormant overlay entry produces NO card and is reported; a NON-BOOLEAN `hidden`
+//      is FATAL, names the app, and leaves the index BYTE-IDENTICAL (arm g3)
+//   6  title precedence holds at all three levels (manifesto > overlay > folder name);
+//      an UNKNOWN overlay key is FATAL and NAMES the key (arm g4)
 //   7  the generator makes NO HTTP request: with APPS_HOST_BASE unroutable it still
 //      succeeds, because that value only builds URLs
-//   8  a malformed overlay exits NON-ZERO with the index BYTE-IDENTICAL
+//   8  a malformed overlay exits NON-ZERO with the index BYTE-IDENTICAL (bad JSON, the
+//      OLD inventory shape `path`, a typo key, a non-boolean `hidden`)
 //
 // The RUNTIME half of the missing-date pin lives in src/main.ts + src/registry.ts and is
 // covered by the full gate (`npm run build`): `updatedAt` is optional in the types, and
@@ -132,6 +142,25 @@ function dormantCount(run) {
   return match === null ? null : Number(match[1]);
 }
 
+// `hidden: N [names]` — parsed, not grepped, so the pin is about the CONTENT. Returns
+// `{ count, names }` where `count` is the number of PUBLISHED folders whose card was
+// WITHHELD and `names` are those folder names.
+function hiddenOf(run) {
+  const match = /^hidden:\s+(\d+)(?:\s*\[([^\]]*)\])?\s*$/m.exec(run.stdout);
+  if (match === null) return null;
+  const raw = (match[2] ?? '').trim();
+  return {
+    count: Number(match[1]),
+    names: raw === '' ? [] : raw.split(',').map((s) => s.trim()),
+  };
+}
+
+function dormantNames(run) {
+  const match = /^dormant overlay entries:\s*\d+\s*\[([^\]]*)\]/m.exec(run.stdout);
+  if (match === null) return null;
+  return match[1].split(',').map((s) => s.trim());
+}
+
 function enrichmentOf(run) {
   const match = /^enrichment:\s+found (\d+), missing (\d+)/m.exec(run.stdout);
   return match === null ? null : { found: Number(match[1]), missing: Number(match[2]) };
@@ -143,6 +172,7 @@ function summaryOf(run) {
     .filter(
       (l) =>
         l.startsWith('apps written:') ||
+        l.startsWith('hidden:') ||
         l.startsWith('enrichment:') ||
         l.startsWith('ignored (no index.html):') ||
         l.startsWith('dormant overlay entries:'),
@@ -240,6 +270,33 @@ async function main() {
     check('card ORDER: zeta is enriched and sorts FIRST (featured-first)',
       zetaA !== undefined && isFeatured(zetaA) && orderA[0] === 'zeta',
       `order=${orderA.join(' > ')}`);
+
+    // -------- arm a (hidden): pin 1/2/3 — a PUBLISHED folder WITHHELD by `hidden: true`
+    const hiddenA = hiddenOf(a);
+    check('pin 1 (hidden) · a PUBLISHED folder with hidden:true produces NO card (omega)',
+      !A.has('omega') && !indexA.apps.some((x) => x.slug === 'omega' || x.title === 'Omega Overlay'),
+      `slugs=${indexA.apps.map((x) => x.slug).join(',')}`);
+    check('pin 1 (hidden) · omega is STILL discovered as an app folder (nothing was removed)',
+      /^app folders:\s+.*\bomega\b/m.test(a.stdout),
+      a.stdout.split('\n').find((l) => l.startsWith('app folders:')) ?? '(no line)');
+    check('pin 1 (hidden) · omega is NOT reported as ignored (it IS an app, just not shown)',
+      ignoredA !== null && !ignoredA.includes('omega'), `ignored=${JSON.stringify(ignoredA)}`);
+    check('pin 2 · the summary NAMES the hidden app (hidden: 1 [omega])',
+      hiddenA !== null && hiddenA.count === 1 && hiddenA.names.includes('omega'),
+      `hidden=${JSON.stringify(hiddenA)}`);
+    check('pin 3 · a hidden app is NOT DORMANT — it was withheld, and the run says so',
+      dormantCount(a) === 1 && !(dormantNames(a) ?? []).includes('omega'),
+      `dormant=${JSON.stringify(dormantNames(a))}`);
+    check('pin 3 · a hidden app\'s ABSENT manifesto produces NO warning AND is never read',
+      !/WARNING[^\n]*omega/.test(a.stderr) &&
+        JSON.stringify(enrichmentOf(a)) === '{"found":1,"missing":1}',
+      `stderr=${JSON.stringify(a.stderr.trim().split('\n').filter((l) => /WARNING/.test(l)))} ` +
+        `enrichment=${JSON.stringify(enrichmentOf(a))}`);
+    // A NON-HIDDEN published folder must still become a card (the negative control for
+    // pin 1: hiding is surgical, not a blanket suppression).
+    check('pin 8 · a NON-hidden published folder STILL becomes a card (zeta, alpha)',
+      A.has('zeta') && A.has('alpha'),
+      `slugs=${indexA.apps.map((x) => x.slug).join(',')}`);
 
     // ------------------------- arm a2: the two output files are BYTE-IDENTICAL (COPIES:)
     console.log('\n=== arm a2 · public/apps.json is byte-identical to public/apps.index.json ===');
@@ -422,6 +479,59 @@ async function main() {
       `${beforeG} vs ${afterG2}`);
     check('pin 8 · the legacy copy is BYTE-IDENTICAL after both failures',
       beforeLegacyG === (await legacyHash()), `${beforeLegacyG} vs ${await legacyHash()}`);
+    check('pin 8 · the forbidden-key message now says DECORATE **or WITHHOLD** (reworded)',
+      /DECORATE/i.test(g2.stderr) && /WITHHOLD/i.test(g2.stderr) && /cannot ADD/i.test(g2.stderr),
+      g2.stderr.trim().split('\n').find((l) => /path/.test(l)) ?? '(no line)');
+
+    // ---------------- arm g3: pin 5 — a NON-BOOLEAN `hidden` is FATAL, byte-identical
+    console.log('\n=== arm g3 · pin 5: non-boolean hidden is FATAL, index BYTE-IDENTICAL ===');
+    const beforeG3 = await indexHash();
+    const beforeLegacyG3 = await legacyHash();
+    for (const [label, bad] of [['string "true"', 'true'], ['number 1', 1], ['null', null]]) {
+      const overlayG3 = join(tempRoot, `overlay-g3-${label.replace(/\W+/g, '-')}.json`);
+      await writeFile(
+        overlayG3,
+        `${JSON.stringify({ version: 1, apps: [{ slug: 'omega', hidden: bad }] }, null, 2)}\n`,
+      );
+      const g3 = await runGenerator({ root: FIXTURE_ROOT, hostBase: BASE, overlay: overlayG3 });
+      const afterG3 = await indexHash();
+      console.log(`g3 (${label}) exit=${g3.code} sha256 before=${beforeG3} after=${afterG3}`);
+      console.log(`g3 stderr: ${g3.stderr.trim().split('\n')[0] ?? ''}`);
+      check(`pin 5 · hidden: ${label} exits NON-ZERO`, g3.code !== 0, `exit=${g3.code}`);
+      check(`pin 5 · and the message NAMES the app ("omega") for hidden: ${label}`,
+        g3.stderr.includes('omega'), g3.stderr.trim().split('\n')[0] ?? '');
+      check('pin 5 · and NAMES `hidden` for hidden: ' + label,
+        /non-boolean hidden/.test(g3.stderr), g3.stderr.trim().split('\n')[0] ?? '');
+      check(`pin 5 · the index is BYTE-IDENTICAL after hidden: ${label}`, beforeG3 === afterG3,
+        `${beforeG3} vs ${afterG3}`);
+    }
+    check('pin 5 · the legacy copy is BYTE-IDENTICAL after every non-boolean failure',
+      beforeLegacyG3 === (await legacyHash()), `${beforeLegacyG3} vs ${await legacyHash()}`);
+
+    // ---------------- arm g4: pin 6 — an UNKNOWN overlay key is FATAL, byte-identical
+    console.log('\n=== arm g4 · pin 6: an UNKNOWN overlay key is FATAL, index BYTE-IDENTICAL ===');
+    const beforeG4 = await indexHash();
+    const beforeLegacyG4 = await legacyHash();
+    for (const typo of ['hiden', 'titel']) {
+      const overlayG4 = join(tempRoot, `overlay-g4-${typo}.json`);
+      await writeFile(
+        overlayG4,
+        `${JSON.stringify({ version: 1, apps: [{ slug: 'zeta', [typo]: true }] }, null, 2)}\n`,
+      );
+      const g4 = await runGenerator({ root: FIXTURE_ROOT, hostBase: BASE, overlay: overlayG4 });
+      const afterG4 = await indexHash();
+      console.log(`g4 (${typo}) exit=${g4.code} sha256 before=${beforeG4} after=${afterG4}`);
+      console.log(`g4 stderr: ${g4.stderr.trim().split('\n')[0] ?? ''}`);
+      check(`pin 6 · the typo key "${typo}" exits NON-ZERO`, g4.code !== 0, `exit=${g4.code}`);
+      check(`pin 6 · and the message NAMES the key "${typo}"`,
+        g4.stderr.includes(`"${typo}"`), g4.stderr.trim().split('\n')[0] ?? '');
+      check(`pin 6 · and NAMES the app ("zeta") for the "${typo}" typo`,
+        g4.stderr.includes('zeta'), g4.stderr.trim().split('\n')[0] ?? '');
+      check(`pin 6 · the index is BYTE-IDENTICAL after the "${typo}" typo`, beforeG4 === afterG4,
+        `${beforeG4} vs ${afterG4}`);
+    }
+    check('pin 6 · the legacy copy is BYTE-IDENTICAL after every unknown-key failure',
+      beforeLegacyG4 === (await legacyHash()), `${beforeLegacyG4} vs ${await legacyHash()}`);
 
     // ------------- arm h: pin 6 last level — NO overlay entry and NO manifesto
     console.log('\n=== arm h · pin 6: folder name is the last fallback (no overlay, no manifesto) ===');
@@ -438,9 +548,12 @@ async function main() {
       H.get('alpha')?.title === 'alpha', `title=${JSON.stringify(H.get('alpha')?.title)}`);
     check('pin 6 · and the enriched "zeta" still uses its MANIFESTO title',
       H.get('zeta')?.title === 'Zeta', `title=${JSON.stringify(H.get('zeta')?.title)}`);
-    check('pin 5 · with an empty overlay nothing is dormant and no card is lost',
-      dormantCount(h) === 0 && indexH.apps.length === 2,
+    check('pin 5 · with an empty overlay nothing is dormant and no VISIBLE card is lost',
+      dormantCount(h) === 0 && indexH.apps.length === 3,
       `dormant=${dormantCount(h)} cards=${indexH.apps.length}`);
+    check('pin 1 · without the overlay, "omega" is an ORDINARY card — hiding lives in the overlay',
+      H.has('omega') && hiddenOf(h)?.count === 0,
+      `cards=${indexH.apps.map((x) => x.slug).join(',')} hidden=${JSON.stringify(hiddenOf(h))}`);
     check('arm h DIFFERS from arm a (the overlay really did decorate)', hashA !== hashH,
       `${hashA} vs ${hashH}`);
 
@@ -458,6 +571,60 @@ async function main() {
     check('arm i exit 0 (the old-host env var is never read)', i.code === 0, `exit=${i.code}`);
     check('and the index is IDENTICAL to arm a (dead env vars change nothing)',
       hashI === hashA, `${hashA} vs ${hashI}`);
+
+    // ------- arm j: pin 4 — a `hidden: true` entry whose folder is NOT published is DORMANT
+    console.log('\n=== arm j · pin 4: a hidden entry with NO published folder is DORMANT ===');
+    const overlayJ = join(tempRoot, 'overlay-j.json');
+    const parsedJ = JSON.parse(await readFile(FIXTURE_OVERLAY, 'utf8'));
+    parsedJ.apps.push({ slug: 'ghost-hidden', title: 'Ghost Hidden', hidden: true });
+    await writeFile(overlayJ, `${JSON.stringify(parsedJ, null, 2)}\n`);
+    const j = await runGenerator({ root: FIXTURE_ROOT, hostBase: BASE, overlay: overlayJ });
+    const hashJ = await indexHash();
+    const indexJ = await readIndex();
+    const hiddenJ = hiddenOf(j);
+    console.log(`exit=${j.code} sha256=${hashJ}`);
+    console.log(`summary: ${summaryOf(j)}`);
+    check('arm j exit 0 (a dormant hidden entry is not fatal)', j.code === 0, `exit=${j.code}`);
+    check('pin 4 · the dormant hidden entry produces NO card',
+      !bySlug(indexJ).has('ghost-hidden'),
+      `slugs=${indexJ.apps.map((x) => x.slug).join(',')}`);
+    check('pin 4 · it is reported as DORMANT, by name, consistently with every dormant entry',
+      dormantCount(j) === 2 && (dormantNames(j) ?? []).includes('Ghost') &&
+        (dormantNames(j) ?? []).includes('ghost-hidden'),
+      `dormant=${JSON.stringify(dormantNames(j))}`);
+    check('pin 4 · and it is NOT reported as a WITHHELD card (it withholds nothing)',
+      hiddenJ !== null && hiddenJ.count === 1 && hiddenJ.names.includes('omega') &&
+        !hiddenJ.names.includes('ghost-hidden'),
+      `hidden=${JSON.stringify(hiddenJ)}`);
+    check('pin 4 · a dormant hidden entry cannot change the grid (hash == arm a)',
+      hashJ === hashA, `${hashA} vs ${hashJ}`);
+
+    // ------- arm k: pin 1 reversal — `hidden: false` on a published folder RESTORES the card
+    console.log('\n=== arm k · pin 1 reversed: hidden:false on "omega" -> the card is BACK ===');
+    const overlayK = join(tempRoot, 'overlay-k.json');
+    const parsedK = JSON.parse(await readFile(FIXTURE_OVERLAY, 'utf8'));
+    for (const entry of parsedK.apps) {
+      if (entry.slug.toLowerCase() === 'omega') entry.hidden = false;
+    }
+    await writeFile(overlayK, `${JSON.stringify(parsedK, null, 2)}\n`);
+    const k = await runGenerator({ root: FIXTURE_ROOT, hostBase: BASE, overlay: overlayK });
+    const hashK = await indexHash();
+    const indexK = await readIndex();
+    const hiddenK = hiddenOf(k);
+    console.log(`exit=${k.code} sha256=${hashK}`);
+    console.log(`summary: ${summaryOf(k)}`);
+    check('arm k exit 0', k.code === 0, `exit=${k.code}`);
+    check('pin 1 reversed · hidden:false -> the card is BACK',
+      bySlug(indexK).has('omega'),
+      `slugs=${indexK.apps.map((x) => x.slug).join(',')}`);
+    check('pin 1 reversed · nothing is hidden now (hidden: 0)',
+      hiddenK !== null && hiddenK.count === 0 && hiddenK.names.length === 0,
+      `hidden=${JSON.stringify(hiddenK)}`);
+    check('pin 3 inverse · a now-VISIBLE folder is READ, so its missing manifesto DOES warn',
+      /WARNING: manifesto absent for "omega"/.test(k.stderr),
+      k.stderr.trim().split('\n').find((l) => l.includes('omega')) ?? '(no omega warning)');
+    check('arm k DIFFERS from arm a (reversibility is real, not a no-op)',
+      hashA !== hashK, `${hashA} vs ${hashK}`);
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }

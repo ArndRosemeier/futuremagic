@@ -15,6 +15,11 @@
       "slug": "Ghost",
       "title": "Ghost",
       "updatedAt": "2026-03-04T05:06:07.000Z"
+    },
+    {
+      "slug": "omega",
+      "title": "Omega Overlay",
+      "hidden": true
     }
   ]
 }

@@ -44,7 +44,8 @@
     {
       "slug": "Campaigner",
       "title": "Campaigner",
-      "updatedAt": "2026-09-02T21:32:33.6057207Z"
+      "updatedAt": "2026-09-02T21:32:33.6057207Z",
+      "hidden": true
     },
     {
       "slug": "BlasterMaster",
@@ -59,7 +60,8 @@
     {
       "slug": "Playtron",
       "title": "Playtron",
-      "updatedAt": "2026-10-02T00:30:00.0000000Z"
+      "updatedAt": "2026-10-02T00:30:00.0000000Z",
+      "hidden": true
     },
     {
       "slug": "Orion",
