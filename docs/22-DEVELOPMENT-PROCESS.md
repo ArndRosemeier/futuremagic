@@ -28,7 +28,7 @@ deltas below in the same landing.
 | Package manager | pnpm | **npm** | `package-lock.json` is the committed lockfile; there is no `pnpm-lock.yaml`. `npm ci` reproduces the committed tree exactly and adds no file to the repo. (Host rule prefers the shared pnpm store *for pnpm projects*; introducing pnpm here would mean committing a second lockfile, which is the drift this table exists to prevent.) |
 | Worktrees | `<repo>/worktrees/<slice>` | **same** | In-repo, gitignored. Never `/tmp`. |
 | Session registry | `--home-administrator-projects-Campaigner--` | **`--home-administrator-projects-futuremagic--`** | Derived from the repo path by `scripts/board.sh`, never hardcoded. |
-| Deploy | push to `main` deploys to the live site | **manual, via `deploy-clean.ps1` for the OLD host; `scripts/publish-apps-root.sh` installs the hub AT the apps root; a push does NOT deploy** | See §3. |
+| Deploy | push to `main` deploys to the live site | **manual, via `scripts/publish-apps-root.sh` (installs the hub AT the apps root); a push does NOT deploy** | See §3. The old-host FTP deploy (`deploy-clean.ps1`) is REMOVED (ledger row 12). |
 | What "LANDED" means | the sha is on `origin/main`, pushed as part of landing | **committed locally AND verified by the dispatcher; PUSHING is a separate, owner-requested act** | `scripts/board.sh` therefore REPORTS an unpushed landing as `on origin/master: NO (local by design)` instead of flagging it stale. In Campaigner the flag is right because every landing pushes; here it would cry stale on every single one. |
 
 ---
@@ -102,21 +102,23 @@ BLOCKED"** (report-churn burns a writer's context for nothing).
 ## 3 · Deploy
 
 **Deployment is MANUAL and is NOT triggered by a git push** — verified 2026-09-21:
-this repo has no `.github/workflows`, and the old-host deploy is a PowerShell script
-(`deploy-clean.ps1`) run by the owner. So `master` is safe to commit and push to
-without publishing anything; publishing is a separate, owner-run act.
+this repo has no `.github/workflows`, and the ONLY deploy is `scripts/publish-apps-root.sh`
+(the old-host `deploy-clean.ps1` was removed in ledger row 12). So `master` is safe to
+commit and push to without publishing anything; publishing is a separate, owner-run act.
 
 The dispatcher's standing rule is therefore: **push only when the owner asks.** A
 local commit is the default landing. If this ever changes — a workflow, a hook, an
 FTP-on-push — this section is WRONG from that moment and the gate-then-push rule
 applies instead.
 
-**There are TWO deploy targets now, and they are independent.**
+**There is ONE deploy target now.**
 
 | Target | How | What it serves |
 |---|---|---|
-| `https://futuremagic.de/` (the OLD site, FROZEN — ledger row 8) | `deploy-clean.ps1`, PowerShell over FTP, run by the owner on Windows. Cannot run on this host (no `pwsh`, queue row 13). | the old site, with its own protected app subfolders |
 | `https://apps.futuremagic.de/` (the hub AT the root — ledger row 10) | `bash scripts/publish-apps-root.sh`, runnable here. Target = `$1`, else `$APPS_ROOT_DIR`, else `$HOME/apps`. | THIS hub: `index.html` + `assets/` + the generated `apps.index.json` |
+
+The old site (`https://futuremagic.de/`) and its FTP deploy are REMOVED (ledger row 12);
+there is no protected-dirs list and none is needed — `publish-apps-root.sh` never deletes.
 
 `scripts/publish-apps-root.sh` runs `npm run build` FIRST and publishes nothing if the
 build fails, **NEVER deletes** (the app folders in that target belong to their own
