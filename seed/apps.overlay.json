@@ -58,6 +58,11 @@
       "updatedAt": "2026-09-14T19:00:56.1564428Z"
     },
     {
+      "slug": "scale",
+      "title": "Scale",
+      "tier": "hero"
+    },
+    {
       "slug": "Playtron",
       "title": "Playtron",
       "updatedAt": "2026-10-02T00:30:00.0000000Z",

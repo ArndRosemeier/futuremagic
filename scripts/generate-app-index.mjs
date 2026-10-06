@@ -54,13 +54,10 @@
 //                                      `slug`, `title`, `updatedAt`, `hidden` are
 //                                      accepted; an UNKNOWN key is FATAL by name.
 //
-// OUTPUTS (both byte-identical, from this one generator so they cannot drift)
-//   public/apps.index.json   what `src/registry.ts` fetches at runtime (new name, so
-//                            `deploy-clean.ps1:210-215` does not skip uploading it).
-//   public/apps.json         legacy name, written ONLY because deploy-clean.ps1:148-150
-//                            throws unless dist/apps.json exists. See the COPIES: line
-//                            in the landing commit: the day that script is updated,
-//                            public/apps.json is dropped.
+// OUTPUT
+//   public/apps.index.json   what `src/registry.ts` fetches at runtime. There is no
+//                            legacy `apps.json` copy any more: it existed ONLY for the
+//                            removed `deploy-clean.ps1` (old-host FTP deploy).
 //
 // FAILURE CONTRACT
 //   All reading and validation happens BEFORE anything is written. A fatal error (a
@@ -84,7 +81,6 @@ import { fileURLToPath } from 'node:url';
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const OUT_INDEX = join(REPO, 'public/apps.index.json');
-const OUT_LEGACY = join(REPO, 'public/apps.json');
 
 // The mark of an app: the static host serves a folder as an app only when it can serve
 // this file, so "has index.html" IS the definition, not a heuristic.
@@ -94,7 +90,12 @@ const MANIFESTO = 'futuremagic.json';
 // Keys the overlay ACCEPTS. The overlay is HAND-MAINTAINED, so it accepts this list and
 // NOTHING else: a typo (`hiden: true`) is FATAL by name, because a silently-ignored key is
 // exactly how `hidden` would have been a no-op instead of a mistake.
-const OVERLAY_KNOWN_KEYS = ['slug', 'title', 'updatedAt', 'hidden'];
+const OVERLAY_KNOWN_KEYS = ['slug', 'title', 'updatedAt', 'hidden', 'tier'];
+
+// Valid display tiers. Absent means `normal`. The overlay is the EDITORIAL layer, so it
+// decides which published app is a hero showcase or a compact "further" entry — exactly
+// as it already decides `hidden`.
+const APP_TIERS = ['hero', 'normal', 'further'];
 
 // Keys the overlay must NEVER carry: it decorates or withholds an app folder, it does not
 // define one. A leftover key from the old `seed/apps.inventory.json` shape is FATAL by name.
@@ -205,6 +206,32 @@ function parseManifesto(data) {
     manifesto.tags = data.tags;
   }
   if (typeof data.screenshot === 'string') manifesto.screenshot = data.screenshot;
+  // Hero-tier extras (ignored by normal/further tiers; read by the hero banner).
+  if (typeof data.description === 'string') manifesto.description = data.description;
+  if (
+    Array.isArray(data.screenshots) &&
+    data.screenshots.every((s) => typeof s === 'string')
+  ) {
+    manifesto.screenshots = data.screenshots;
+  }
+  if (
+    Array.isArray(data.highlights) &&
+    data.highlights.every((h) => typeof h === 'string')
+  ) {
+    manifesto.highlights = data.highlights;
+  }
+  if (Array.isArray(data.links)) {
+    const links = data.links
+      .filter(
+        (l) =>
+          isRecord(l) &&
+          typeof l.label === 'string' &&
+          typeof l.url === 'string',
+      )
+      .map((l) => ({ label: l.label, url: l.url }));
+    if (links.length > 0) manifesto.links = links;
+  }
+  if (typeof data.cta === 'string') manifesto.cta = data.cta;
   return manifesto;
 }
 
@@ -271,6 +298,15 @@ function readOverlay(raw) {
     if (nonEmptyString(value.title) !== undefined) entry.title = value.title;
     if (typeof value.updatedAt === 'string') entry.updatedAt = value.updatedAt;
     if (value.hidden === true) entry.hidden = true;
+    if (value.tier !== undefined) {
+      if (!APP_TIERS.includes(value.tier)) {
+        throw new Error(
+          `overlay app "${slug}" has an invalid tier (${JSON.stringify(value.tier)}) — ` +
+            `tier must be one of ${APP_TIERS.join(', ')}`,
+        );
+      }
+      if (value.tier !== 'normal') entry.tier = value.tier;
+    }
     return entry;
   });
   const version = typeof data.version === 'number' ? data.version : 1;
@@ -377,9 +413,16 @@ async function main() {
     // `updatedAt` comes from the overlay ONLY (a manifesto has no date field). Absent means
     // the key is OMITTED — NEVER fabricated (main.ts then renders no "Updated" label).
     if (overlayEntry?.updatedAt !== undefined) card.updatedAt = overlayEntry.updatedAt;
+    // tier is EDITORIAL: overlay-only (like `hidden`). Absent means `normal`.
+    if (overlayEntry?.tier !== undefined) card.tier = overlayEntry.tier;
     if (manifesto.tagline !== undefined) card.tagline = manifesto.tagline;
     if (manifesto.tags !== undefined) card.tags = manifesto.tags;
     if (manifesto.screenshot !== undefined) card.screenshot = manifesto.screenshot;
+    if (manifesto.description !== undefined) card.description = manifesto.description;
+    if (manifesto.screenshots !== undefined) card.screenshots = manifesto.screenshots;
+    if (manifesto.highlights !== undefined) card.highlights = manifesto.highlights;
+    if (manifesto.links !== undefined) card.links = manifesto.links;
+    if (manifesto.cta !== undefined) card.cta = manifesto.cta;
     cards.push(card);
   }
 
@@ -395,18 +438,14 @@ async function main() {
   const index = { version: overlay.version, apps: cards };
   const text = `${JSON.stringify(index, null, 2)}\n`;
 
-  // (e) ATOMIC-ON-SUCCESS write: both temps first, then both renames. A fatal error above
-  // has already returned, leaving the previous files byte-identical.
+  // (e) ATOMIC-ON-SUCCESS write: write the temp first, then rename. A fatal error above
+  // has already returned, leaving the previous file byte-identical.
   const tmpIndex = `${OUT_INDEX}.tmp`;
-  const tmpLegacy = `${OUT_LEGACY}.tmp`;
   try {
     await writeFile(tmpIndex, text);
-    await writeFile(tmpLegacy, text);
     await rename(tmpIndex, OUT_INDEX);
-    await rename(tmpLegacy, OUT_LEGACY);
   } catch (cause) {
     await rm(tmpIndex, { force: true });
-    await rm(tmpLegacy, { force: true });
     throw cause;
   }
 
@@ -435,7 +474,6 @@ async function main() {
   );
   console.log(`app folders:     ${folders.length > 0 ? folders.join(', ') : '(none)'}`);
   console.log(`wrote:           ${OUT_INDEX}`);
-  console.log(`wrote:           ${OUT_LEGACY} (byte-identical legacy copy)`);
 }
 
 main().catch((error) => {

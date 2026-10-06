@@ -1,5 +1,12 @@
 {
   "title": "Zeta",
   "tagline": "Fixture tagline for Zeta — the ONLY enrichment, so removing it un-features the card.",
-  "tags": ["fixture"]
+  "tags": ["fixture"],
+  "description": "A first paragraph about Zeta.\n\nA second paragraph for the hero banner.",
+  "screenshots": ["/shots/zeta.png", "https://example.com/zeta-2.png"],
+  "highlights": ["First highlight", "Second highlight"],
+  "links": [
+    { "label": "Source", "url": "https://github.com/example/zeta" }
+  ],
+  "cta": "Play Zeta"
 }

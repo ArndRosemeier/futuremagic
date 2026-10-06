@@ -62,7 +62,6 @@ const execFileAsync = promisify(execFile);
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GENERATOR = join(REPO, 'scripts/generate-app-index.mjs');
 const INDEX = join(REPO, 'public/apps.index.json');
-const LEGACY = join(REPO, 'public/apps.json');
 const FIXTURE_ROOT = join(REPO, 'scripts/fixtures/appsroot');
 const FIXTURE_OVERLAY = join(REPO, 'scripts/fixtures/apps.overlay.json');
 const BASE = 'https://apps.futuremagic.de/';
@@ -119,7 +118,6 @@ async function hashOf(path) {
 }
 
 const indexHash = () => hashOf(INDEX);
-const legacyHash = () => hashOf(LEGACY);
 async function readIndex() {
   return JSON.parse(await readFile(INDEX, 'utf8'));
 }
@@ -208,14 +206,13 @@ async function main() {
     console.log('=== arm a · baseline (fixture apps root, fixture overlay) ===');
     const a = await runGenerator({ root: FIXTURE_ROOT, hostBase: BASE, overlay: FIXTURE_OVERLAY });
     const hashA = await indexHash();
-    const hashLegacyA = await legacyHash();
     const indexA = await readIndex();
     const A = bySlug(indexA);
     const orderA = runtimeOrder(indexA.apps);
     const zetaA = A.get('zeta');
     const alphaA = A.get('alpha');
     const ignoredA = ignoredOf(a);
-    console.log(`exit=${a.code} sha256=${hashA} legacy=${hashLegacyA}`);
+    console.log(`exit=${a.code} sha256=${hashA}`);
     console.log(`summary: ${summaryOf(a)}`);
     console.log(`order:   ${orderA.join(' > ')}`);
     check('arm a exit 0', a.code === 0, `exit=${a.code}`);
@@ -240,6 +237,18 @@ async function main() {
         'Fixture tagline for Zeta — the ONLY enrichment, so removing it un-features the card.' &&
         (zetaA.tags?.length ?? 0) > 0,
       `record=${JSON.stringify(zetaA)}`);
+    check('pin tier · overlay tier hero is INLINED (zeta.tier === "hero")',
+      zetaA !== undefined && zetaA.tier === 'hero',
+      `record=${JSON.stringify(zetaA)}`);
+    check('pin tier · the hero extras are INLINED from the manifesto (description/highlights/links/cta)',
+      zetaA !== undefined && typeof zetaA.description === 'string' &&
+        zetaA.description.includes('second paragraph') &&
+        (zetaA.highlights?.length ?? 0) === 2 && (zetaA.links?.length ?? 0) === 1 &&
+        zetaA.cta === 'Play Zeta',
+      `record=${JSON.stringify(zetaA)}`);
+    check('pin tier · a card WITHOUT an overlay tier has NO tier key (defaults to normal)',
+      alphaA !== undefined && !('tier' in alphaA),
+      `record=${JSON.stringify(alphaA)}`);
     check('pin 3 · a MISSING manifesto warns and KEEPS the card (alpha)',
       alphaA !== undefined && !('tagline' in alphaA) &&
         /WARNING: manifesto absent for "alpha"/.test(a.stderr),
@@ -300,9 +309,8 @@ async function main() {
 
     // ------------------------- arm a2: the two output files are BYTE-IDENTICAL (COPIES:)
     console.log('\n=== arm a2 · public/apps.json is byte-identical to public/apps.index.json ===');
-    console.log(`index=${hashA} legacy=${hashLegacyA}`);
-    check('the legacy copy is byte-identical (one generator, no drift)', hashA === hashLegacyA,
-      `${hashA} vs ${hashLegacyA}`);
+    console.log(`index=${hashA}`);
+    check('the generated index is non-empty JSON', indexA.apps.length > 0, `cards=${indexA.apps.length}`);
 
     // ---------------- arm b: a directory LOSES its index.html -> card vanishes, ignored
     console.log('\n=== arm b · pin 1: "zeta" loses its index.html ===');
@@ -329,19 +337,15 @@ async function main() {
     // ---------------- arm c: a nonexistent APPS_ROOT_DIR -> non-zero, BYTE-IDENTICAL
     console.log('\n=== arm c · pin 4: APPS_ROOT_DIR does not exist ===');
     const beforeC = await indexHash();
-    const beforeLegacyC = await legacyHash();
     const missingRoot = join(tempRoot, 'no-such-apps-root');
     const c = await runGenerator({ root: missingRoot, hostBase: BASE, overlay: FIXTURE_OVERLAY });
     const afterC = await indexHash();
-    const afterLegacyC = await legacyHash();
     console.log(`exit=${c.code} sha256 before=${beforeC} after=${afterC}`);
     console.log(`stderr: ${c.stderr.trim().split('\n')[0] ?? ''}`);
     check('pin 4 · a nonexistent apps root exits NON-ZERO', c.code !== 0, `exit=${c.code}`);
     check('pin 4 · the message NAMES the path', c.stderr.includes(missingRoot),
       c.stderr.trim().split('\n')[0] ?? '');
     check('pin 4 · the index is BYTE-IDENTICAL', beforeC === afterC, `${beforeC} vs ${afterC}`);
-    check('pin 4 · the legacy copy is BYTE-IDENTICAL too',
-      beforeLegacyC === afterLegacyC, `${beforeLegacyC} vs ${afterLegacyC}`);
 
     // -------------------------------------------- arm c2: the root is a FILE, not a dir
     console.log('\n=== arm c2 · pin 4: APPS_ROOT_DIR is a FILE ===');
@@ -452,7 +456,6 @@ async function main() {
     // ------------------------------ arm g: a malformed overlay -> FATAL, byte-identical
     console.log('\n=== arm g · pin 8: malformed overlay is FATAL, index BYTE-IDENTICAL ===');
     const beforeG = await indexHash();
-    const beforeLegacyG = await legacyHash();
     const badJson = join(tempRoot, 'overlay-bad-json.json');
     await writeFile(badJson, '{ this is not json ');
     const g1 = await runGenerator({ root: FIXTURE_ROOT, hostBase: BASE, overlay: badJson });
@@ -477,8 +480,6 @@ async function main() {
       `exit=${g2.code}`);
     check('pin 8 · and the index is still BYTE-IDENTICAL', beforeG === afterG2,
       `${beforeG} vs ${afterG2}`);
-    check('pin 8 · the legacy copy is BYTE-IDENTICAL after both failures',
-      beforeLegacyG === (await legacyHash()), `${beforeLegacyG} vs ${await legacyHash()}`);
     check('pin 8 · the forbidden-key message now says DECORATE **or WITHHOLD** (reworded)',
       /DECORATE/i.test(g2.stderr) && /WITHHOLD/i.test(g2.stderr) && /cannot ADD/i.test(g2.stderr),
       g2.stderr.trim().split('\n').find((l) => /path/.test(l)) ?? '(no line)');
@@ -486,7 +487,6 @@ async function main() {
     // ---------------- arm g3: pin 5 — a NON-BOOLEAN `hidden` is FATAL, byte-identical
     console.log('\n=== arm g3 · pin 5: non-boolean hidden is FATAL, index BYTE-IDENTICAL ===');
     const beforeG3 = await indexHash();
-    const beforeLegacyG3 = await legacyHash();
     for (const [label, bad] of [['string "true"', 'true'], ['number 1', 1], ['null', null]]) {
       const overlayG3 = join(tempRoot, `overlay-g3-${label.replace(/\W+/g, '-')}.json`);
       await writeFile(
@@ -505,13 +505,10 @@ async function main() {
       check(`pin 5 · the index is BYTE-IDENTICAL after hidden: ${label}`, beforeG3 === afterG3,
         `${beforeG3} vs ${afterG3}`);
     }
-    check('pin 5 · the legacy copy is BYTE-IDENTICAL after every non-boolean failure',
-      beforeLegacyG3 === (await legacyHash()), `${beforeLegacyG3} vs ${await legacyHash()}`);
 
     // ---------------- arm g4: pin 6 — an UNKNOWN overlay key is FATAL, byte-identical
     console.log('\n=== arm g4 · pin 6: an UNKNOWN overlay key is FATAL, index BYTE-IDENTICAL ===');
     const beforeG4 = await indexHash();
-    const beforeLegacyG4 = await legacyHash();
     for (const typo of ['hiden', 'titel']) {
       const overlayG4 = join(tempRoot, `overlay-g4-${typo}.json`);
       await writeFile(
@@ -530,8 +527,6 @@ async function main() {
       check(`pin 6 · the index is BYTE-IDENTICAL after the "${typo}" typo`, beforeG4 === afterG4,
         `${beforeG4} vs ${afterG4}`);
     }
-    check('pin 6 · the legacy copy is BYTE-IDENTICAL after every unknown-key failure',
-      beforeLegacyG4 === (await legacyHash()), `${beforeLegacyG4} vs ${await legacyHash()}`);
 
     // ------------- arm h: pin 6 last level — NO overlay entry and NO manifesto
     console.log('\n=== arm h · pin 6: folder name is the last fallback (no overlay, no manifesto) ===');
@@ -558,8 +553,7 @@ async function main() {
       `${hashA} vs ${hashH}`);
 
     // ------------------------- arm i: the dead legacy env vars are still DEAD
-    console.log('\n=== arm i · HUB_BASE + APPS_INVENTORY set to junk are IGNORED ===');
-    const i = await runGenerator({
+    console.log('\n=== arm i · HUB_BASE + APPS_INVENTORY set to junk are IGNORED ===');const i = await runGenerator({
       root: FIXTURE_ROOT,
       hostBase: BASE,
       overlay: FIXTURE_OVERLAY,
@@ -600,8 +594,7 @@ async function main() {
       hashJ === hashA, `${hashA} vs ${hashJ}`);
 
     // ------- arm k: pin 1 reversal — `hidden: false` on a published folder RESTORES the card
-    console.log('\n=== arm k · pin 1 reversed: hidden:false on "omega" -> the card is BACK ===');
-    const overlayK = join(tempRoot, 'overlay-k.json');
+    console.log('\n=== arm k · pin 1 reversed: hidden:false on "omega" -> the card is BACK ===');const overlayK = join(tempRoot, 'overlay-k.json');
     const parsedK = JSON.parse(await readFile(FIXTURE_OVERLAY, 'utf8'));
     for (const entry of parsedK.apps) {
       if (entry.slug.toLowerCase() === 'omega') entry.hidden = false;
@@ -625,6 +618,28 @@ async function main() {
       k.stderr.trim().split('\n').find((l) => l.includes('omega')) ?? '(no omega warning)');
     check('arm k DIFFERS from arm a (reversibility is real, not a no-op)',
       hashA !== hashK, `${hashA} vs ${hashK}`);
+
+    // ------- arm l: pin tier — an INVALID overlay tier is FATAL, index BYTE-IDENTICAL
+    console.log('\n=== arm l · pin tier: an INVALID overlay tier is FATAL, index BYTE-IDENTICAL ===');
+    const beforeL = await indexHash();
+    for (const badTier of ['showcase', 1, null]) {
+      const overlayL = join(tempRoot, `overlay-l-${String(badTier).replace(/\W+/g, '-')}.json`);
+      await writeFile(
+        overlayL,
+        `${JSON.stringify({ version: 1, apps: [{ slug: 'zeta', tier: badTier }] }, null, 2)}\n`,
+      );
+      const l = await runGenerator({ root: FIXTURE_ROOT, hostBase: BASE, overlay: overlayL });
+      const afterL = await indexHash();
+      console.log(`l (tier=${JSON.stringify(badTier)}) exit=${l.code}`);
+      console.log(`l stderr: ${l.stderr.trim().split('\n')[0] ?? ''}`);
+      check(`pin tier · tier=${JSON.stringify(badTier)} exits NON-ZERO`, l.code !== 0,
+        `exit=${l.code}`);
+      check(`pin tier · and NAMES the app + the invalid tier (${JSON.stringify(badTier)})`,
+        l.stderr.includes('zeta') && /invalid tier/.test(l.stderr),
+        l.stderr.trim().split('\n')[0] ?? '');
+      check(`pin tier · the index is BYTE-IDENTICAL after tier=${JSON.stringify(badTier)}`,
+        beforeL === afterL, `${beforeL} vs ${afterL}`);
+    }
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
