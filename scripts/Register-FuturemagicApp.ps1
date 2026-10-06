@@ -9,6 +9,10 @@
 #       -Path "/LlmTable/" `
 #       -FtpPassword $FTP_PASSWORD `
 #       -ManifestoLocalPath "apps\web\dist\futuremagic.json"
+#
+# Tiers: apps without a tier render as "normal" cards. Pass -Tier hero|normal|further
+# to set one; when omitted, an app's existing tier in apps.json is kept.
+# (To change only the tier without redeploying, use Set-FuturemagicAppTier.ps1.)
 
 param(
     [Parameter(Mandatory = $true)]
@@ -27,7 +31,10 @@ param(
     [string]$FtpUser = "12529-Pyrion",
     [string]$RegistryRemotePath = "/webseiten/apps.json",
     [string]$ManifestoLocalPath = "",
-    [string]$AppRemoteDir = ""
+    [string]$AppRemoteDir = "",
+
+    [ValidateSet("", "hero", "normal", "further")]
+    [string]$Tier = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -92,6 +99,18 @@ function Upload-FtpFile([string]$LocalPath, [string]$RemoteUrl, [string]$User, [
     Upload-FtpBytes $RemoteUrl $bytes $User $Password
 }
 
+# Absent tier == "normal"; only hero/further are written to apps.json.
+function Resolve-Tier($existing) {
+    if ($Tier -ne "") {
+        if ($Tier -eq "normal") { return $null }
+        return $Tier
+    }
+    if ($null -ne $existing -and [string]$existing -ne "" -and [string]$existing -ne "normal") {
+        return [string]$existing
+    }
+    return $null
+}
+
 $Path = Normalize-AppPath $Path
 $updatedAt = (Get-Date).ToUniversalTime().ToString("o")
 
@@ -135,6 +154,10 @@ foreach ($app in $appsList) {
         if ($null -ne $app.url -and [string]$app.url.Length -gt 0) {
             $entry.url = [string]$app.url
         }
+        $resolvedTier = Resolve-Tier $app.tier
+        if ($null -ne $resolvedTier) {
+            $entry.tier = $resolvedTier
+        }
         # manifesto flag set after we know whether upload succeeds
         $newApps += $entry
         $found = $true
@@ -154,17 +177,25 @@ foreach ($app in $appsList) {
         if ($null -ne $app.manifesto) {
             $entry.manifesto = [bool]$app.manifesto
         }
+        if ($null -ne $app.tier -and [string]$app.tier -ne "") {
+            $entry.tier = [string]$app.tier
+        }
         $newApps += $entry
     }
 }
 
 if (-not $found) {
-    $newApps += [ordered]@{
+    $entry = [ordered]@{
         slug      = $Slug
         title     = $Title
         path      = $Path
         updatedAt = $updatedAt
     }
+    $resolvedTier = Resolve-Tier $null
+    if ($null -ne $resolvedTier) {
+        $entry.tier = $resolvedTier
+    }
+    $newApps += $entry
 }
 
 $hasManifestoFile = ($ManifestoLocalPath -ne "" -and (Test-Path $ManifestoLocalPath))
@@ -187,6 +218,9 @@ foreach ($app in $newApps) {
             $entry.url = [string]$app.url
         }
         $entry.manifesto = $manifestoFlag
+        if ($null -ne $app.tier) {
+            $entry.tier = [string]$app.tier
+        }
         $stamped += $entry
     } else {
         $stamped += $app
@@ -202,7 +236,9 @@ $json = ($outObj | ConvertTo-Json -Depth 6) + "`n"
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 $bytes = $utf8NoBom.GetBytes($json)
 Upload-FtpBytes $registryUrl $bytes $FtpUser $FtpPassword
-Write-Host "[OK] apps.json updated ($Slug, manifesto=$manifestoFlag)" -ForegroundColor Green
+$tierLabel = ($newApps | Where-Object { [string]$_.slug -eq $Slug } | Select-Object -First 1).tier
+if ($null -eq $tierLabel) { $tierLabel = "normal" }
+Write-Host "[OK] apps.json updated ($Slug, manifesto=$manifestoFlag, tier=$tierLabel)" -ForegroundColor Green
 
 if ($hasManifestoFile) {
     if ($AppRemoteDir -eq "") {

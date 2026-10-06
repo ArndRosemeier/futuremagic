@@ -1,12 +1,32 @@
-import type {
-  AppManifesto,
-  AppsRegistry,
-  RegistryApp,
-  ResolvedApp,
+import {
+  APP_TIERS,
+  type AppLink,
+  type AppManifesto,
+  type AppTier,
+  type AppsRegistry,
+  type RegistryApp,
+  type ResolvedApp,
+  type TieredApps,
 } from './types';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === 'string');
+}
+
+function isAppTier(value: unknown): value is AppTier {
+  return APP_TIERS.includes(value as AppTier);
+}
+
+function parseLink(value: unknown): AppLink | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.label !== 'string' || typeof value.url !== 'string') {
+    return null;
+  }
+  return { label: value.label, url: value.url };
 }
 
 function parseRegistryApp(value: unknown): RegistryApp | null {
@@ -33,6 +53,9 @@ function parseRegistryApp(value: unknown): RegistryApp | null {
   if (typeof value.manifesto === 'boolean') {
     app.manifesto = value.manifesto;
   }
+  if (isAppTier(value.tier)) {
+    app.tier = value.tier;
+  }
   return app;
 }
 
@@ -52,13 +75,19 @@ function parseManifesto(data: unknown): AppManifesto | null {
   const manifesto: AppManifesto = {};
   if (typeof data.title === 'string') manifesto.title = data.title;
   if (typeof data.tagline === 'string') manifesto.tagline = data.tagline;
-  if (
-    Array.isArray(data.tags) &&
-    data.tags.every((t): t is string => typeof t === 'string')
-  ) {
-    manifesto.tags = data.tags;
-  }
+  if (isStringArray(data.tags)) manifesto.tags = data.tags;
   if (typeof data.screenshot === 'string') manifesto.screenshot = data.screenshot;
+  if (typeof data.description === 'string') {
+    manifesto.description = data.description;
+  }
+  if (isStringArray(data.screenshots)) manifesto.screenshots = data.screenshots;
+  if (isStringArray(data.highlights)) manifesto.highlights = data.highlights;
+  if (Array.isArray(data.links)) {
+    manifesto.links = data.links
+      .map(parseLink)
+      .filter((link): link is AppLink => link !== null);
+  }
+  if (typeof data.cta === 'string') manifesto.cta = data.cta;
   return manifesto;
 }
 
@@ -100,7 +129,20 @@ function resolveScreenshotUrl(
   return `${href}${screenshot}`;
 }
 
-export async function loadResolvedApps(): Promise<ResolvedApp[]> {
+function resolveScreenshotUrls(
+  href: string,
+  manifesto: AppManifesto | null,
+): string[] {
+  const sources =
+    manifesto?.screenshots !== undefined && manifesto.screenshots.length > 0
+      ? manifesto.screenshots
+      : [manifesto?.screenshot];
+  return sources
+    .map((s) => resolveScreenshotUrl(href, s))
+    .filter((url): url is string => url !== null);
+}
+
+export async function loadResolvedApps(): Promise<TieredApps> {
   const response = await fetch('/apps.json', { cache: 'no-cache' });
   if (!response.ok) {
     throw new Error(`Failed to load apps.json (${response.status})`);
@@ -120,25 +162,43 @@ export async function loadResolvedApps(): Promise<ResolvedApp[]> {
         manifesto !== null &&
         (Boolean(manifesto.tagline) ||
           Boolean(manifesto.tags?.length) ||
-          Boolean(manifesto.screenshot));
+          Boolean(manifesto.screenshot) ||
+          Boolean(manifesto.screenshots?.length));
+
+      const screenshotUrls = resolveScreenshotUrls(href, manifesto);
 
       return {
         slug: app.slug,
         title: manifesto?.title ?? app.title,
         href,
         updatedAt: app.updatedAt,
+        tier: app.tier ?? 'normal',
         featured: hasFeature,
         tagline: manifesto?.tagline ?? null,
         tags: manifesto?.tags ?? [],
-        screenshotUrl: resolveScreenshotUrl(href, manifesto?.screenshot),
+        screenshotUrl:
+          resolveScreenshotUrl(href, manifesto?.screenshot) ??
+          screenshotUrls[0] ??
+          null,
+        description: manifesto?.description ?? null,
+        screenshotUrls,
+        highlights: manifesto?.highlights ?? [],
+        links: manifesto?.links ?? [],
+        cta: manifesto?.cta ?? null,
       };
     }),
   );
 
-  return resolved.sort((a, b) => {
+  resolved.sort((a, b) => {
     if (a.featured !== b.featured) return a.featured ? -1 : 1;
     return a.title.localeCompare(b.title);
   });
+
+  const tiers: TieredApps = { hero: [], normal: [], further: [] };
+  for (const app of resolved) {
+    tiers[app.tier].push(app);
+  }
+  return tiers;
 }
 
 export function formatUpdatedAt(iso: string): string {

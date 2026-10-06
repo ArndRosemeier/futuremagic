@@ -8,7 +8,7 @@ import {
 import { mountStoryReader, type StoryReaderHandle } from './storyReader';
 import { mountOrbitBrand } from './orbitBrand';
 import { mountVibe, type VibeHandle } from './vibe';
-import type { ResolvedApp, Story } from './types';
+import type { ResolvedApp, Story, TieredApps } from './types';
 
 type Section = 'apps' | 'stories';
 
@@ -69,6 +69,160 @@ function renderAppCard(app: ResolvedApp, index: number): string {
       </div>
     </a>
   `;
+}
+
+function renderParagraphs(text: string, className: string): string {
+  return text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .map((p) => `<p class="${className}">${escapeHtml(p)}</p>`)
+    .join('');
+}
+
+function renderHeroCard(app: ResolvedApp, index: number): string {
+  const delay = Math.min(index * 90, 270);
+  const shots = app.screenshotUrls;
+  const galleryInner =
+    shots.length > 0
+      ? shots
+          .map(
+            (url, i) => `<img
+              class="hero-shot${i === 0 ? ' is-active' : ''}"
+              src="${escapeHtml(url)}"
+              alt=""
+              ${i === 0 ? '' : 'loading="lazy"'}
+            />`,
+          )
+          .join('')
+      : `<div class="app-shot-fallback">${escapeHtml(app.title)}</div>`;
+  const dots =
+    shots.length > 1
+      ? `<div class="hero-dots" role="tablist" aria-label="Screenshots">${shots
+          .map(
+            (_, i) => `<button
+              type="button"
+              role="tab"
+              class="hero-dot${i === 0 ? ' is-active' : ''}"
+              data-hero-dot="${i}"
+              aria-selected="${i === 0 ? 'true' : 'false'}"
+              aria-label="Screenshot ${i + 1}"
+            ></button>`,
+          )
+          .join('')}</div>`
+      : '';
+  const tagline =
+    app.tagline !== null
+      ? `<p class="hero-tagline">${escapeHtml(app.tagline)}</p>`
+      : '';
+  const description =
+    app.description !== null
+      ? renderParagraphs(app.description, 'hero-description')
+      : '';
+  const highlights =
+    app.highlights.length > 0
+      ? `<ul class="hero-highlights">${app.highlights
+          .map((h) => `<li>${escapeHtml(h)}</li>`)
+          .join('')}</ul>`
+      : '';
+  const tags =
+    app.tags.length > 0
+      ? `<ul class="app-tags">${app.tags
+          .map((t) => `<li>${escapeHtml(t)}</li>`)
+          .join('')}</ul>`
+      : '';
+  const links = app.links
+    .map(
+      (link) => `<a
+        class="hero-link"
+        href="${escapeHtml(link.url)}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >${escapeHtml(link.label)}</a>`,
+    )
+    .join('');
+  const updated = formatUpdatedAt(app.updatedAt);
+  const updatedHtml =
+    updated !== ''
+      ? `<span class="app-updated">Updated ${escapeHtml(updated)}</span>`
+      : '';
+
+  return `
+    <article
+      class="hero-card${index % 2 === 1 ? ' hero-card--flip' : ''}"
+      data-hero
+      style="animation-delay: ${delay}ms"
+    >
+      <div class="hero-gallery" data-hero-gallery>
+        <a
+          class="hero-gallery-link"
+          href="${escapeHtml(app.href)}"
+          tabindex="-1"
+          aria-hidden="true"
+        >
+          ${galleryInner}
+        </a>
+        ${dots}
+      </div>
+      <div class="hero-body">
+        <p class="hero-kicker">Featured</p>
+        <h2 class="hero-title">${escapeHtml(app.title)}</h2>
+        ${tagline}
+        ${description}
+        ${highlights}
+        ${tags}
+        <div class="hero-actions">
+          <a class="hero-cta" href="${escapeHtml(app.href)}">
+            ${escapeHtml(app.cta ?? 'Launch')} →
+          </a>
+          ${links}
+        </div>
+        ${updatedHtml}
+      </div>
+    </article>
+  `;
+}
+
+function renderFurtherRow(app: ResolvedApp): string {
+  const tagline =
+    app.tagline !== null
+      ? `<span class="further-tagline">${escapeHtml(app.tagline)}</span>`
+      : '';
+  const updated = formatUpdatedAt(app.updatedAt);
+  return `
+    <li>
+      <a class="further-row" href="${escapeHtml(app.href)}">
+        <span class="further-title">${escapeHtml(app.title)}</span>
+        ${tagline}
+        <span class="further-updated">${escapeHtml(updated)}</span>
+      </a>
+    </li>
+  `;
+}
+
+function renderAppTiers(tiers: TieredApps): string {
+  const hero =
+    tiers.hero.length > 0
+      ? `<div class="hero-list">${tiers.hero
+          .map((app, i) => renderHeroCard(app, i))
+          .join('')}</div>`
+      : '';
+  const normal =
+    tiers.normal.length > 0
+      ? `<div class="apps-grid" data-grid>${tiers.normal
+          .map((app, i) => renderAppCard(app, i))
+          .join('')}</div>`
+      : '';
+  const further =
+    tiers.further.length > 0
+      ? `<section class="further" aria-labelledby="further-heading">
+          <h2 class="further-heading" id="further-heading">Further experiments</h2>
+          <ul class="further-list">${tiers.further
+            .map(renderFurtherRow)
+            .join('')}</ul>
+        </section>`
+      : '';
+  return `<div class="apps-tiers" data-tiers>${hero}${normal}${further}</div>`;
 }
 
 function renderStoryCard(story: Story, index: number): string {
@@ -178,6 +332,96 @@ function bindCardMotion(grid: HTMLElement): () => void {
   };
 }
 
+const HERO_ROTATE_MS = 6000;
+
+function bindHeroGalleries(root: HTMLElement): () => void {
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const cleanups: Array<() => void> = [];
+
+  for (const gallery of root.querySelectorAll<HTMLElement>(
+    '[data-hero-gallery]',
+  )) {
+    let index = 0;
+    let paused = false;
+
+    const shots = (): HTMLImageElement[] => [
+      ...gallery.querySelectorAll<HTMLImageElement>('.hero-shot'),
+    ];
+    const dots = (): HTMLButtonElement[] => [
+      ...gallery.querySelectorAll<HTMLButtonElement>('[data-hero-dot]'),
+    ];
+
+    const show = (next: number): void => {
+      const imgs = shots();
+      if (imgs.length === 0) return;
+      index = ((next % imgs.length) + imgs.length) % imgs.length;
+      imgs.forEach((img, i) => img.classList.toggle('is-active', i === index));
+      dots().forEach((dot, i) => {
+        dot.classList.toggle('is-active', i === index);
+        dot.setAttribute('aria-selected', i === index ? 'true' : 'false');
+      });
+    };
+
+    for (const img of shots()) {
+      img.addEventListener('error', () => {
+        console.warn(`Screenshot missing: ${img.currentSrc || img.src}`);
+        const pos = shots().indexOf(img);
+        img.remove();
+        dots()[pos]?.remove();
+        dots().forEach((dot, i) => {
+          dot.dataset.heroDot = String(i);
+        });
+        if (dots().length < 2) gallery.querySelector('.hero-dots')?.remove();
+        if (shots().length === 0) {
+          const fallback = document.createElement('div');
+          fallback.className = 'app-shot-fallback';
+          fallback.textContent =
+            gallery.closest('[data-hero]')?.querySelector('.hero-title')
+              ?.textContent ?? 'App';
+          gallery.querySelector('.hero-gallery-link')?.append(fallback);
+          return;
+        }
+        show(pos < index ? index - 1 : index);
+      });
+    }
+
+    const onDotClick = (event: Event): void => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const dot = target.closest<HTMLElement>('[data-hero-dot]');
+      if (!dot) return;
+      show(Number(dot.dataset.heroDot));
+    };
+    const onEnter = (): void => {
+      paused = true;
+    };
+    const onLeave = (): void => {
+      paused = false;
+    };
+    gallery.addEventListener('click', onDotClick);
+    gallery.addEventListener('pointerenter', onEnter);
+    gallery.addEventListener('pointerleave', onLeave);
+
+    const timer =
+      reduced || shots().length < 2
+        ? undefined
+        : window.setInterval(() => {
+            if (!paused && !document.hidden) show(index + 1);
+          }, HERO_ROTATE_MS);
+
+    cleanups.push(() => {
+      if (timer !== undefined) window.clearInterval(timer);
+      gallery.removeEventListener('click', onDotClick);
+      gallery.removeEventListener('pointerenter', onEnter);
+      gallery.removeEventListener('pointerleave', onLeave);
+    });
+  }
+
+  return () => {
+    for (const fn of cleanups) fn();
+  };
+}
+
 function bindAgentHighlights(
   grid: HTMLElement,
   vibe: VibeHandle,
@@ -185,7 +429,9 @@ function bindAgentHighlights(
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reduced) return () => undefined;
 
-  const cards = [...grid.querySelectorAll<HTMLElement>('[data-app-card]')];
+  const cards = [
+    ...grid.querySelectorAll<HTMLElement>('[data-app-card], [data-hero]'),
+  ];
   let raf = 0;
 
   const tick = (): void => {
@@ -236,16 +482,19 @@ async function main(): Promise<void> {
   const destroyOrbit = mountOrbitBrand(root);
   let unbindMotion: (() => void) | undefined;
   let unbindAgents: (() => void) | undefined;
+  let unbindHeroes: (() => void) | undefined;
   let storyReader: StoryReaderHandle | undefined;
   let section: Section = 'apps';
-  let appsCache: ResolvedApp[] | null = null;
+  let appsCache: TieredApps | null = null;
   let storiesCache: Story[] | null = null;
 
   const clearViewBindings = (): void => {
     unbindMotion?.();
     unbindAgents?.();
+    unbindHeroes?.();
     unbindMotion = undefined;
     unbindAgents = undefined;
+    unbindHeroes = undefined;
     storyReader?.destroy();
     storyReader = undefined;
   };
@@ -257,24 +506,27 @@ async function main(): Promise<void> {
       if (appsCache === null) {
         appsCache = await loadResolvedApps();
       }
-      const apps = appsCache;
-      if (apps.length === 0) {
+      const tiers = appsCache;
+      const total =
+        tiers.hero.length + tiers.normal.length + tiers.further.length;
+      if (total === 0) {
         contentMount.innerHTML =
           '<p class="apps-status">No apps registered yet.</p>';
         return;
       }
 
-      contentMount.innerHTML = `<div class="apps-grid" data-grid>${apps
-        .map((app, i) => renderAppCard(app, i))
-        .join('')}</div>`;
-      const grid = contentMount.querySelector('[data-grid]');
-      if (!(grid instanceof HTMLElement)) {
-        throw new Error('apps grid missing');
+      contentMount.innerHTML = renderAppTiers(tiers);
+      const tiersRoot = contentMount.querySelector('[data-tiers]');
+      if (!(tiersRoot instanceof HTMLElement)) {
+        throw new Error('apps tiers missing');
       }
-      unbindMotion = bindCardMotion(grid);
-      unbindAgents = bindAgentHighlights(grid, vibe);
+      unbindMotion = bindCardMotion(tiersRoot);
+      unbindAgents = bindAgentHighlights(tiersRoot, vibe);
+      unbindHeroes = bindHeroGalleries(tiersRoot);
 
-      for (const img of grid.querySelectorAll<HTMLImageElement>('.app-shot')) {
+      for (const img of tiersRoot.querySelectorAll<HTMLImageElement>(
+        '.app-shot',
+      )) {
         img.addEventListener('error', () => {
           console.warn(`Screenshot missing: ${img.currentSrc || img.src}`);
           const fallback = document.createElement('div');
