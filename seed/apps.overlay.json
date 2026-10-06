@@ -9,7 +9,8 @@
     {
       "slug": "LlmTable",
       "title": "LlmTable",
-      "updatedAt": "2026-07-24T13:48:33.4651486Z"
+      "updatedAt": "2026-07-24T13:48:33.4651486Z",
+      "tier": "further"
     },
     {
       "slug": "ColossusWeb",
@@ -39,13 +40,14 @@
     {
       "slug": "GM_Helper",
       "title": "GM Cockpit",
-      "updatedAt": "2026-08-29T23:05:58.9443933Z"
+      "updatedAt": "2026-08-29T23:05:58.9443933Z",
+      "tier": "further"
     },
     {
       "slug": "Campaigner",
       "title": "Campaigner",
       "updatedAt": "2026-09-02T21:32:33.6057207Z",
-      "hidden": true
+      "tier": "further"
     },
     {
       "slug": "BlasterMaster",
@@ -55,7 +57,8 @@
     {
       "slug": "Civ",
       "title": "CivTS",
-      "updatedAt": "2026-09-14T19:00:56.1564428Z"
+      "updatedAt": "2026-09-14T19:00:56.1564428Z",
+      "tier": "further"
     },
     {
       "slug": "scale",
@@ -75,7 +78,13 @@
     },
     {
       "slug": "fracvibe",
-      "title": "FracVibe"
+      "title": "FracVibe",
+      "tier": "further"
+    },
+    {
+      "slug": "filestore",
+      "title": "FileStore",
+      "tier": "further"
     },
     {
       "slug": "imager",
