@@ -94,6 +94,11 @@
       "slug": "risk",
       "title": "Risk",
       "tier": "further"
+    },
+    {
+      "slug": "starlord",
+      "title": "StarLord",
+      "tier": "hero"
     }
   ]
 }
