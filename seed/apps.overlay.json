@@ -99,6 +99,25 @@
       "slug": "starlord",
       "title": "StarLord",
       "tier": "hero"
+    },
+    {
+      "slug": "dunfinity",
+      "title": "Dunfinity",
+      "tier": "hero"
+    },
+    {
+      "slug": "procmuse",
+      "title": "ProcMuse"
+    },
+    {
+      "slug": "vectorrunner",
+      "title": "Vector Runner",
+      "tier": "further"
+    },
+    {
+      "slug": "solarpolis",
+      "title": "Solarpolis",
+      "tier": "further"
     }
   ]
 }
