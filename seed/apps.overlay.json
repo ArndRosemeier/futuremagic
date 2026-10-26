@@ -118,6 +118,11 @@
       "slug": "solarpolis",
       "title": "Solarpolis",
       "tier": "further"
+    },
+    {
+      "slug": "masterworld",
+      "title": "MasterWorld",
+      "tier": "hero"
     }
   ]
 }
