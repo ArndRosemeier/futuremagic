@@ -123,6 +123,11 @@
       "slug": "masterworld",
       "title": "MasterWorld",
       "tier": "hero"
+    },
+    {
+      "slug": "exception",
+      "title": "Exception",
+      "tier": "further"
     }
   ]
 }
