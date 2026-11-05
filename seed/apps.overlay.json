@@ -25,7 +25,8 @@
     {
       "slug": "Conquest",
       "title": "Conquest",
-      "updatedAt": "2026-07-21T19:19:46.7871236Z"
+      "updatedAt": "2026-07-21T19:19:46.7871236Z",
+      "tier": "further"
     },
     {
       "slug": "Eco",
@@ -127,6 +128,41 @@
     {
       "slug": "exception",
       "title": "Exception",
+      "tier": "further"
+    },
+    {
+      "slug": "astralis",
+      "title": "Astralis",
+      "tier": "further"
+    },
+    {
+      "slug": "civolution",
+      "title": "Civolution",
+      "tier": "further"
+    },
+    {
+      "slug": "galaxy",
+      "title": "Galaxy",
+      "tier": "further"
+    },
+    {
+      "slug": "mule",
+      "title": "M.U.L.E.",
+      "tier": "further"
+    },
+    {
+      "slug": "xenoworld",
+      "title": "Xenoworld",
+      "tier": "further"
+    },
+    {
+      "slug": "Norgo",
+      "title": "Norgo",
+      "tier": "further"
+    },
+    {
+      "slug": "4k",
+      "title": "4K",
       "tier": "further"
     }
   ]
